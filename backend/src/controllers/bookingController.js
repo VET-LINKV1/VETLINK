@@ -16,7 +16,10 @@ const fail = (res, e) => res.status(errStatus(e)).json({ success: false, error: 
 const bookingController = {
 
   async listReasons(_req, res) {
-    res.json({ success: true, data: bookingService.listReasons() });
+    try {
+      const data = await bookingService.listReasons();
+      res.json({ success: true, data });
+    } catch (e) { fail(res, e); }
   },
 
   async getAvailableSlots(req, res) {

@@ -32,20 +32,60 @@ try { notificationService = require('./notificationService'); } catch (_) {}
 const STAFF_ROLES = ['admin', 'veterinarian', 'staff'];
 
 /**
- * Reasons exposed to the client UI. The `urgency` here is the
- * DEFAULT — the client may not override emergency-coded reasons.
+ * Fallback Reasons (legacy) in case the DB table isn't migrated yet.
  */
-const REASONS = [
-  { code: 'annual_checkup', label: 'Annual Check-up', urgency: 'routine',   durationMins: 30, suggestedSpecialty: null, color: 'blue'    },
-  { code: 'vaccination',    label: 'Vaccination',     urgency: 'routine',   durationMins: 20, suggestedSpecialty: null, color: 'emerald' },
-  { code: 'grooming',       label: 'Grooming',        urgency: 'routine',   durationMins: 60, suggestedSpecialty: null, color: 'violet'  },
-  { code: 'injury',         label: 'Limping / Injury',urgency: 'urgent',    durationMins: 30, suggestedSpecialty: 'Surgery', color: 'amber' },
-  { code: 'emergency',      label: 'Emergency',       urgency: 'emergency', durationMins: 45, suggestedSpecialty: 'Emergency & Critical Care', color: 'red' },
-  { code: 'other',          label: 'Other',           urgency: 'standard',  durationMins: 30, suggestedSpecialty: null, color: 'slate'   },
+const FALLBACK_REASONS = [
+  { code: 'annual_checkup', label: 'Annual Check-up', urgency: 'routine',   durationMins: 30, suggestedSpecialty: null, color: 'blue',    price: 500.00  },
+  { code: 'vaccination',    label: 'Vaccination',     urgency: 'routine',   durationMins: 20, suggestedSpecialty: null, color: 'emerald', price: 350.00  },
+  { code: 'grooming',       label: 'Grooming',        urgency: 'routine',   durationMins: 60, suggestedSpecialty: null, color: 'violet',  price: 450.00  },
+  { code: 'injury',         label: 'Limping / Injury',urgency: 'urgent',    durationMins: 30, suggestedSpecialty: 'Surgery', color: 'amber',  price: 800.00  },
+  { code: 'emergency',      label: 'Emergency',       urgency: 'emergency', durationMins: 45, suggestedSpecialty: 'Emergency & Critical Care', color: 'red', price: 1500.00 },
+  { code: 'other',          label: 'Other',           urgency: 'standard',  durationMins: 30, suggestedSpecialty: null, color: 'slate',   price: null     },
 ];
 
-function findReason(code) {
-  return REASONS.find(r => r.code === code) || null;
+async function listReasonsFromDb() {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('services')
+      .select('id, code, label, description, urgency, duration_mins, suggested_specialty, color, price')
+      .eq('is_active', true)
+      .order('display_order', { ascending: true });
+
+    if (error) throw error;
+    if (!data || data.length === 0) return FALLBACK_REASONS;
+
+    return data.map(r => ({
+      ...r,
+      durationMins: r.duration_mins, // Map DB snake_case to frontend camelCase
+      suggestedSpecialty: r.suggested_specialty,
+      price: r.price,
+    }));
+  } catch (e) {
+    logger.warn('booking', 'Failed to load services from DB, using fallbacks', { msg: e.message });
+    return FALLBACK_REASONS;
+  }
+}
+
+async function findReason(code) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('services')
+      .select('id, code, label, description, urgency, duration_mins, suggested_specialty, color, price')
+      .eq('code', code)
+      .single();
+
+    if (error) throw error;
+    if (!data) return FALLBACK_REASONS.find(r => r.code === code) || null;
+
+    return {
+      ...data,
+      durationMins: data.duration_mins,
+      suggestedSpecialty: data.suggested_specialty,
+      price: data.price,
+    };
+  } catch (e) {
+    return FALLBACK_REASONS.find(r => r.code === code) || null;
+  }
 }
 
 async function assertPetOwnedBy(petId, userId, role) {
@@ -62,8 +102,8 @@ const bookingService = {
 
   /* ──────────────────── REASONS ────────────────────────────── */
 
-  listReasons() {
-    return REASONS;
+  async listReasons() {
+    return listReasonsFromDb();
   },
 
   /* ──────────────────── SLOTS / VET SUGGESTION ─────────────── */
@@ -98,7 +138,7 @@ const bookingService = {
    */
   async suggestVets({ reasonCode, date, preferredTime, limit = 5 }) {
     if (!date)       throw new Error('date is required.');
-    const reason = findReason(reasonCode);
+    const reason = await findReason(reasonCode);
     if (!reason)     throw new Error('Unknown reason code: ' + reasonCode);
 
     // Emergencies always grab the earliest slot, regardless of time pref.
@@ -166,7 +206,7 @@ const bookingService = {
     if (!reasonCode)    throw new Error('reasonCode is required.');
     if (!appointmentAt) throw new Error('appointmentAt is required.');
 
-    const reason = findReason(reasonCode);
+    const reason = await findReason(reasonCode);
     if (!reason) throw new Error('Unknown reason code: ' + reasonCode);
 
     const pet = await assertPetOwnedBy(petId, actorId, actorRole);

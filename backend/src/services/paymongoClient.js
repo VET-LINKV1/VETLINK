@@ -9,7 +9,9 @@
  */
 const logger = require('../utils/logger');
 
-const API_BASE = 'https://api.paymongo.com/v1';
+// Configurable base URL (spec: PAYMONGO_API_URL). Falls back to the
+// official production endpoint when unset.
+const API_BASE = (process.env.PAYMONGO_API_URL || 'https://api.paymongo.com/v1').replace(/\/$/, '');
 
 function authHeader() {
   const key = process.env.PAYMONGO_SECRET_KEY;

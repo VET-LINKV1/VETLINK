@@ -69,17 +69,18 @@ function filterAvailableSlots(allSlots, booked, localDate) {
 }
 
 /**
- * Validate a booking attempt against:
+ * Validate a booking attempt.
+ *
+ * Owners may book at ANY time — we intentionally do NOT enforce the vet's
+ * working day, clinic hours, or slot boundaries (those only drive the
+ * optional slot picker UI). We still guard against:
  *   1. Past-time rejection
- *   2. Vet's working day
- *   3. Within working hours
- *   4. On a slot boundary
- *   5. No overlap with existing same-day bookings
+ *   2. Overlap with the vet's existing same-day bookings
  *
  * @param {string} localDate   YYYY-MM-DD (wall clock for clinic)
  * @param {string} localTime   HH:MM      (wall clock)
  * @param {number} durationMins
- * @param {Array}  vetSchedules  rows from vet_schedules
+ * @param {Array}  vetSchedules  rows from vet_schedules (optional; unused for gating)
  * @param {Array}  existing      rows from appointments (same date, vet)
  * @param {Date}   nowUTC        injected for testability; defaults to now
  * @param {string} appointmentISO  the ISO timestamp the row will be inserted with
@@ -102,35 +103,9 @@ function validateSlot({
     }
   }
 
-  // 2. Vet's working day
-  const dow = dayOfWeekFromLocalDate(localDate);
-  const sched = vetSchedules.find((s) => s.day_of_week === dow && s.is_active);
-  if (!sched) {
-    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-    return { valid: false, reason: `Veterinarian is not available on ${days[dow]}.` };
-  }
-
-  // 3. Within working hours
-  const asm = timeToMins(localTime);
-  const aem = asm + durationMins;
-  const ss  = timeToMins(sched.start_time);
-  const se  = timeToMins(sched.end_time);
-  if (asm < ss || aem > se) {
-    return {
-      valid: false,
-      reason: `Booking must be within clinic hours (${sched.start_time}–${sched.end_time}).`,
-    };
-  }
-
-  // 4. On slot boundary
-  const dur = sched.slot_duration_mins || 30;
-  if ((asm - ss) % dur !== 0) {
-    return { valid: false, reason: `Booking must start on ${dur}-minute intervals.` };
-  }
-
-  // 5. Conflict — overlap against existing same-day bookings (instant compare)
+  // 2. Conflict — overlap against existing same-day bookings (instant compare)
   const apptInstant = appointmentISO ? new Date(appointmentISO).getTime() : null;
-  for (const e of existing) {
+  for (const e of existing || []) {
     if (!e.appointment_at) continue;
     if (['cancelled','completed'].includes(e.status)) continue;
     const eStart = new Date(e.appointment_at).getTime();

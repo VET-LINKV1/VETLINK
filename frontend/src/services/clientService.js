@@ -13,6 +13,14 @@ export const clientService = {
     const { data } = await apiClient.get('/pets');
     return data.data;
   },
+  async getPetRecord(petId) {
+    const { data } = await apiClient.get('/client/pets/' + petId + '/record');
+    return data.data;
+  },
+  async getFileUrl(fileId) {
+    const { data } = await apiClient.get('/emr/files/' + fileId + '/url');
+    return data.data;
+  },
   async addPet(pet) {
     const { data } = await apiClient.post('/pets', pet);
     return data.data;

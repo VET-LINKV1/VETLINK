@@ -1,4 +1,5 @@
 import { Calendar, Clock, PawPrint, Stethoscope, XCircle, CheckCircle, AlertCircle, Ban } from 'lucide-react';
+import PayNowButton from './PayNowButton';
 
 const STATUS_CONFIG = {
   pending: {
@@ -35,10 +36,13 @@ const STATUS_CONFIG = {
   },
 };
 
-function AppointmentCard({ appointment, onCancel }) {
+function AppointmentCard({ appointment, onCancel, onPay }) {
   const cfg = STATUS_CONFIG[appointment.status] || STATUS_CONFIG.pending;
   const StatusIcon = cfg.icon;
   const canCancel = appointment.status === 'pending';
+
+  // Show Pay button if appointment is unpaid/pending payment AND not already paid
+  const canPay = appointment.payment_status === 'unpaid' || appointment.payment_status === 'pending' || appointment.payment_status === 'failed';
 
   const formatDate = (iso) => {
     if (!iso) return 'Date TBD';
@@ -110,6 +114,10 @@ function AppointmentCard({ appointment, onCancel }) {
               <XCircle className="w-3.5 h-3.5" />
               Cancel
             </button>
+          )}
+
+          {canPay && onPay && (
+            <PayNowButton appointment={appointment} onSuccess={onPay} />
           )}
         </div>
       </div>

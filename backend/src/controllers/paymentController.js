@@ -1,12 +1,41 @@
 const paymentService = require('../services/paymentService');
-const { listServices } = require('../config/pricing');
+const { listServices: listStaticServices } = require('../config/pricing');
 const { verifyPayMongoSignature } = require('../utils/paymongoSignature');
 const logger = require('../utils/logger');
+const { supabaseAdmin } = require('../config/supabase');
 
 const paymentController = {
   /** GET /api/payments/services */
   async listServices(req, res) {
-    res.json({ success: true, data: listServices() });
+    try {
+      // Fetch active services from the database
+      const { data, error } = await supabaseAdmin
+        .from('services')
+        .select('id, code, label, price')
+        .eq('is_active', true)
+        .order('display_order', { ascending: true });
+
+      if (error) throw error;
+
+      // If no services in DB, fallback to static list
+      if (!data || data.length === 0) {
+        return res.json({ success: true, data: listStaticServices() });
+      }
+
+      // Transform to match expected format
+      const services = data.map(s => ({
+        name: s.label,
+        centavos: s.price ? Math.round(s.price * 100) : 0,
+        displayPrice: s.price ? '₱' + s.price.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '—',
+        code: s.code,
+        id: s.id,
+      }));
+
+      res.json({ success: true, data: services });
+    } catch (err) {
+      logger.warn('payment.listServices', 'Failed to load services from DB, using fallback', { msg: err.message });
+      res.json({ success: true, data: listStaticServices() });
+    }
   },
 
   /** POST /api/payments/create-checkout-session */
@@ -53,8 +82,10 @@ const paymentController = {
     const secret    = process.env.PAYMONGO_WEBHOOK_SECRET || '';
     const isLive    = (process.env.PAYMONGO_SECRET_KEY || '').startsWith('sk_live_');
 
-    // Verify (skipped only if no secret is set — useful for very early dev,
-    // but you should set the secret as soon as you add a webhook in dashboard)
+    // Verify the HMAC signature. In production (NODE_ENV=production) the
+    // secret MUST be set; if it isn't, we reject rather than silently accept
+    // unverified webhooks. In development we tolerate a missing secret so the
+    // flow can be exercised without the dashboard configured.
     if (secret) {
       const v = verifyPayMongoSignature(req.rawBody, sigHeader, secret, { live: isLive });
       if (!v.valid) {
@@ -64,6 +95,9 @@ const paymentController = {
         return res.status(401).json({ success: false, error: 'Invalid webhook signature: ' + v.reason });
       }
       logger.info('payment.webhook', 'signature verified', { ts: v.timestamp });
+    } else if (process.env.NODE_ENV === 'production') {
+      logger.error('payment.webhook', 'refusing unverified webhook — PAYMONGO_WEBHOOK_SECRET not set in production');
+      return res.status(401).json({ success: false, error: 'Webhook secret not configured' });
     } else {
       logger.warn('payment.webhook', 'no PAYMONGO_WEBHOOK_SECRET set — skipping signature verify (dev only)');
     }

@@ -1,26 +1,42 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Clock, FileText, PawPrint, Loader2, AlertCircle } from 'lucide-react';
 
-const SERVICE_TYPES = [
-  'General Checkup',
-  'Vaccination',
-  'Dental Cleaning',
-  'Surgery Prep',
-  'Follow-up Visit',
-  'Grooming',
-  'Deworming',
-  'Emergency',
-  'Other',
+// Fallback if services fail to load (matches backend FALLBACK_REASONS)
+const FALLBACK_SERVICES = [
+  { code: 'annual_checkup', label: 'Annual Check-up', durationMins: 30, price: 500.00, urgency: 'routine', color: 'blue' },
+  { code: 'vaccination',    label: 'Vaccination',     durationMins: 20, price: 350.00, urgency: 'routine', color: 'emerald' },
+  { code: 'grooming',       label: 'Grooming',        durationMins: 60, price: 450.00, urgency: 'routine', color: 'violet' },
+  { code: 'injury',         label: 'Limping / Injury',durationMins: 30, price: 800.00, urgency: 'urgent', color: 'amber' },
+  { code: 'emergency',      label: 'Emergency',       durationMins: 45, price: 1500.00, urgency: 'emergency', color: 'red' },
+  { code: 'other',          label: 'Other',           durationMins: 30, price: null, urgency: 'standard', color: 'slate' },
 ];
 
-function AppointmentForm({ pets, onSubmit, onCancel }) {
+function AppointmentForm({ pets, services = [], onSubmit, onCancel }) {
+  const [serviceList, setServiceList] = useState([]);
+  const [servicesLoading, setServicesLoading] = useState(true);
+
+  useEffect(() => {
+    if (services?.length) {
+      setServiceList(services);
+    } else {
+      setServiceList(FALLBACK_SERVICES);
+    }
+    setServicesLoading(false);
+  }, [services]);
   const [form, setForm] = useState({
     petId: '',
-    type: 'General Checkup',
+    type: '',
     date: '',
     time: '',
     notes: '',
   });
+
+  // Initialize default service type
+  useEffect(() => {
+    if (serviceList.length && !form.type) {
+      setForm(prev => ({ ...prev, type: serviceList[0].code }));
+    }
+  }, [serviceList, form.type]);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState('');
@@ -111,9 +127,10 @@ function AppointmentForm({ pets, onSubmit, onCancel }) {
           <span className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Service Type *</span>
         </label>
         <select value={form.type} onChange={e => set('type', e.target.value)}
-          className={inputClass('type')}>
-          {SERVICE_TYPES.map(t => <option key={t}>{t}</option>)}
+          className={inputClass('type')} disabled={servicesLoading}>
+          {serviceList.map(s => <option key={s.code} value={s.code}>{s.label}{s.durationMins ? ` (~${s.durationMins} min)` : ''}{s.price ? ` · ₱${s.price}` : ''}</option>)}
         </select>
+        {servicesLoading && <p className="mt-1 text-xs text-slate-400 font-body">Loading services...</p>}
         {errors.type && <p className="mt-1 text-xs text-red-500 font-body">{errors.type}</p>}
       </div>
 

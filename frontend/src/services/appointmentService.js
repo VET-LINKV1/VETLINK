@@ -25,6 +25,10 @@ export const appointmentService = {
     const { data } = await apiClient.patch(`/appointments/${id}/reschedule`, payload);
     return data.data;
   },
+  async listServices() {
+    const { data } = await apiClient.get('/booking/reasons');
+    return data.data;
+  },
 };
 
 export const notificationService = {

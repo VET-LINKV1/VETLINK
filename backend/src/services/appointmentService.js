@@ -148,11 +148,12 @@ const appointmentService = {
       link:    '/client/appointments',
       smsBody: `PHVC: Booking received for ${pet.name} on ${dateStr} at ${timeStr} with ${vet.name}. We'll confirm shortly.`,
     });
-    await notificationService.create(vetId, {
+    await notificationService.createWithSMS(vetId, {
       title:   'New Appointment',
       message: `${type} for ${pet.name} on ${dateStr} at ${timeStr}.`,
       type:    'info',
       link:    '/dashboard',
+      smsBody: `PHVC: New booking — ${type} for ${pet.name} on ${dateStr} at ${timeStr}. Open your dashboard to approve or decline.`,
     });
 
     return appt;

@@ -6,7 +6,8 @@
  *   2. Twilio    — if TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN + TWILIO_PHONE_NUMBER are set.
  *   3. Dev mode  — log to console + return OTP via API response for testing.
  *
- * Each provider uses Node's built-in fetch (Node 18+). No new deps.
+ * Each provider uses Node's built-in fetch (Node 18+) except Twilio, which uses
+ * the `twilio` package. No external deps for Semaphore.
  */
 const logger = require('../utils/logger');
 
@@ -32,9 +33,9 @@ function isTwilioConfigured() {
 }
 
 function activeProvider() {
-  if (isSmsDisabled())         return 'disabled';
-  if (isSemaphoreConfigured()) return 'semaphore';
-  if (isTwilioConfigured())    return 'twilio';
+  if (isSmsDisabled())            return 'disabled';
+  if (isSemaphoreConfigured())    return 'semaphore';
+  if (isTwilioConfigured())       return 'twilio';
   return 'dev-console';
 }
 

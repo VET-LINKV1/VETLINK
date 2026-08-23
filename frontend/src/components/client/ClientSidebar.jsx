@@ -1,13 +1,11 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Calendar, PawPrint, BarChart2, Activity, LogOut, X, ChevronRight, User, Shield, CalendarPlus, Heart, MessageCircle, Video, Syringe } from 'lucide-react';
+import { LayoutDashboard, Calendar, PawPrint, BarChart2, Activity, LogOut, X, ChevronRight, User, Shield, Heart, MessageCircle, Video, Syringe } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 
 const NAV_ITEMS = [
   { icon: LayoutDashboard, label: 'Dashboard',        to: '/client' },
-  { icon: CalendarPlus,    label: 'Book Visit',       to: '/client/book' },
   { icon: Calendar,        label: 'Appointments',     to: '/client/appointments' },
   { icon: PawPrint,        label: 'Pet Records',      to: '/client/pets' },
-  { icon: Shield,          label: 'Health Passport',  to: '/client/passport' },
   { icon: Heart,           label: 'Post-Care & Pharmacy', to: '/client/postcare' },
   { icon: MessageCircle,   label: 'Communications',   to: '/client/communications' },
   { icon: BarChart2,       label: 'Analytics',        to: '/client/analytics' },

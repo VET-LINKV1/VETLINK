@@ -30,7 +30,6 @@ import ClientEMRPage         from './pages/emr/ClientEMRPage';
 import PassportDashboardPage from './pages/passport/PassportDashboardPage';
 import PetPassportPage       from './pages/passport/PetPassportPage';
 import SharedPassportPage    from './pages/passport/SharedPassportPage';
-import SmartBookingPage      from './pages/booking/SmartBookingPage';
 import IntakeSubmitPage      from './pages/booking/IntakeSubmitPage';
 import VetIntakeReviewPage   from './pages/booking/VetIntakeReviewPage';
 import ClientPostCarePage    from './pages/postcare/ClientPostCarePage';
@@ -43,6 +42,9 @@ import StaffMessagesPage     from './pages/comms/StaffMessagesPage';
 import TelehealthPage        from './pages/comms/TelehealthPage';
 import ConsultationsListPage from './pages/comms/ConsultationsListPage';
 import UserManagementPage    from './pages/admin/UserManagementPage';
+import AdminPetRecordsPage   from './pages/admin/AdminPetRecordsPage';
+import ServicesAdminPage     from './pages/admin/ServicesAdminPage';
+import SettingsPage          from './pages/admin/SettingsPage';
 import PaymentSuccessPage    from './pages/client/PaymentSuccessPage';
 import PaymentFailedPage     from './pages/client/PaymentFailedPage';
 import ProtectedRoute         from './components/ProtectedRoute';
@@ -63,23 +65,40 @@ function App() {
       try {
         console.log('[Auth] init: checking Supabase session...');
         const { data: { session } } = await supabase.auth.getSession();
+        let activeSession = session;
 
-        if (!session) {
+        if (!activeSession) {
+          const stored = useAuthStore.getState();
+          if (stored.accessToken) {
+            try {
+              console.log('[Auth] init: restoring session from store');
+              const { data: restored, error: restoreErr } = await supabase.auth.setSession({
+                access_token:  stored.accessToken,
+                refresh_token: stored.refreshToken || undefined,
+              });
+              if (!restoreErr && restored?.session) activeSession = restored.session;
+            } catch (e) {
+              console.warn('[Auth] init: restore failed', e?.message);
+            }
+          }
+        }
+
+        if (!activeSession) {
           console.log('[Auth] init: no Supabase session — clearing local state');
           logout();
           return;
         }
 
         useAuthStore.setState({
-          accessToken:  session.access_token,
-          refreshToken: session.refresh_token,
+          accessToken:  activeSession.access_token,
+          refreshToken: activeSession.refresh_token,
         });
 
         try {
           const u = await authService.getMe();
           setAuth({
             user: u,
-            session: { accessToken: session.access_token, refreshToken: session.refresh_token },
+            session: { accessToken: activeSession.access_token, refreshToken: activeSession.refresh_token },
           });
         } catch (err) {
           const status = err?.response?.status;
@@ -92,7 +111,7 @@ function App() {
           if (stored.user) {
             setAuth({
               user: stored.user,
-              session: { accessToken: session.access_token, refreshToken: session.refresh_token },
+              session: { accessToken: activeSession.access_token, refreshToken: activeSession.refresh_token },
             });
           } else {
             logout();
@@ -187,16 +206,6 @@ function App() {
         </ProtectedRoute>
       } />
 
-      {/* Smart Booking — client wizard */}
-      <Route path="/client/book" element={
-        <ProtectedRoute allowedRoles={['client']}>
-          <ClientLayout><SmartBookingPage /></ClientLayout>
-        </ProtectedRoute>
-      } />
-      <Route path="/book" element={
-        <Staff roles={['admin','staff','veterinarian','client']}><SmartBookingPage /></Staff>
-      } />
-
       {/* Intake form — layout depends on role */}
       <Route path="/intake/:appointmentId" element={
         <ProtectedRoute>
@@ -224,15 +233,15 @@ function App() {
         <Staff roles={['admin']}><VetDischargePage /></Staff>
       } />
 
-      {/* Direct Support & Communication Channels */}
+      {/* Direct Support & Communication Channels — VET + CLIENT only */}
       <Route path="/messages" element={
-        <Staff roles={['admin','veterinarian','staff']}><CommunicationsPage /></Staff>
+        <Staff roles={['veterinarian']}><CommunicationsPage /></Staff>
       } />
       <Route path="/telehealth" element={
-        <Staff roles={['admin','veterinarian','staff']}><CommunicationsPage /></Staff>
+        <Staff roles={['veterinarian']}><CommunicationsPage /></Staff>
       } />
       <Route path="/communications" element={
-        <Staff roles={['admin','veterinarian','staff']}><CommunicationsPage /></Staff>
+        <Staff roles={['veterinarian']}><CommunicationsPage /></Staff>
       } />
       <Route path="/telehealth/:id" element={
         <ProtectedRoute>
@@ -263,6 +272,15 @@ function App() {
       } />
       <Route path="/users" element={<Navigate to="/admin/users" replace />} />
 
+      {/* Services Management (all clinical staff) */}
+      <Route path="/admin/services" element={
+        <Staff roles={['admin','staff','veterinarian']}><ServicesAdminPage /></Staff>
+      } />
+
+      <Route path="/settings" element={
+        <Staff roles={['admin']}><SettingsPage /></Staff>
+      } />
+
       <Route path="/appointments" element={
         <Staff roles={['admin','staff','veterinarian']}><StaffAppointmentsPage /></Staff>
       } />
@@ -287,7 +305,7 @@ function App() {
       <Route path="/action-plan" element={<Navigate to="/prescriptive-analytics" replace />} />
 
       <Route path="/pets" element={
-        <Staff roles={['admin','staff','veterinarian']}><ClientPetsPage /></Staff>
+        <Staff roles={['admin','staff','veterinarian']}><AdminPetRecordsPage /></Staff>
       } />
 
       <Route path="/profile" element={

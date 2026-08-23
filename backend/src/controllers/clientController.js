@@ -35,6 +35,24 @@ const clientController = {
     }
   },
 
+  async getPetRecord(req, res) {
+    try {
+      const data = await clientService.getPetRecord(req.user.id, req.params.petId);
+      return res.status(200).json({ success: true, data });
+    } catch (err) {
+      return res.status(err.message.includes('not found') ? 404 : 500).json({ success: false, error: err.message });
+    }
+  },
+
+  async getAnalytics(req, res) {
+    try {
+      const data = await clientService.getAnalytics(req.user.id);
+      return res.status(200).json({ success: true, data });
+    } catch (err) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  },
+
   async addPet(req, res) {
     try {
       const pet = await clientService.addPet(req.user.id, req.body);

@@ -12,7 +12,9 @@ const schemas = {
     petId:         uuid.required(),
     clientId:      uuid.optional(),
     vetId:         uuid.optional().allow(null),
-    reasonCode:    Joi.string().valid('annual_checkup','vaccination','grooming','injury','emergency','other').required(),
+    // reasonCode is validated against the live services catalog in
+    // bookingService (findReason), so any service added by staff works.
+    reasonCode:    Joi.string().min(2).max(100).required(),
     appointmentAt: Joi.date().iso().required(),
     durationMins:  Joi.number().integer().min(10).max(240),
     notes:         Joi.string().max(2000).allow('', null),

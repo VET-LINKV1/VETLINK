@@ -47,6 +47,8 @@ router.post('/register', validateMiddleware(registerSchema), clientController.re
 router.use(authMiddleware, roleMiddleware('client'));
 router.get('/dashboard',          clientController.getDashboard);
 router.get('/pets',               clientController.getPets);
+router.get('/pets/:petId/record',  clientController.getPetRecord);
+router.get('/analytics',             clientController.getAnalytics);
 router.post('/pets',              validateMiddleware(petSchema), clientController.addPet);
 router.get('/appointments',       clientController.getAppointments);
 router.post('/appointments',      clientController.bookAppointment);

@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import {
   LayoutDashboard, Calendar, Users, PawPrint,
-  FileText, Settings, X, ChevronRight, LogOut, Activity, Zap, Sparkles, Wand2, Stethoscope, Shield, ClipboardList, Pill, MessageCircle, Video,
+  FileText, Settings, X, ChevronRight, LogOut, Activity, Zap, Sparkles, Wand2, Stethoscope, Shield, ClipboardList, Pill, MessageCircle, Video, Settings2,
 } from 'lucide-react';
 
 const NAV_ITEMS = {
@@ -15,13 +15,13 @@ const NAV_ITEMS = {
     { icon: ClipboardList,   label: 'Pre-visit Review',to: '/vet/intake-review' },
     { icon: Pill,            label: 'Pharmacy',       to: '/pharmacy' },
     { icon: Shield,          label: 'Health Passport',to: '/passport' },
-    { icon: MessageCircle,   label: 'Communications', to: '/communications' },
+    { icon: Settings2,       label: 'Services',       to: '/admin/services' },
     { icon: Activity,        label: 'Health Check',   to: '/health-check' },
     { icon: Zap,             label: 'Root Cause',     to: '/diagnostic-analytics' },
     { icon: Sparkles,        label: 'Predictive',     to: '/predictive-analytics' },
     { icon: Wand2,           label: 'Action Plan',    to: '/prescriptive-analytics' },
     { icon: Users,           label: 'User Management',to: '/admin/users' },
-    { icon: Settings,        label: 'Settings',       to: '/settings',      soon: true },
+    { icon: Settings,        label: 'Settings',       to: '/settings' },
   ],
   veterinarian: [
     { icon: LayoutDashboard, label: 'Dashboard',      to: '/dashboard' },
@@ -32,6 +32,7 @@ const NAV_ITEMS = {
     { icon: Stethoscope,     label: 'EMR',            to: '/emr' },
     { icon: ClipboardList,   label: 'Pre-visit Review',to: '/vet/intake-review' },
     { icon: Shield,          label: 'Health Passport',to: '/passport' },
+    { icon: Settings2,       label: 'Services',       to: '/admin/services' },
     { icon: MessageCircle,   label: 'Communications', to: '/communications' },
     { icon: Activity,        label: 'Health Check',   to: '/health-check' },
   ],
@@ -43,7 +44,7 @@ const NAV_ITEMS = {
     { icon: Stethoscope,     label: 'EMR',            to: '/emr' },
     { icon: ClipboardList,   label: 'Pre-visit Review',to: '/vet/intake-review' },
     { icon: Shield,          label: 'Health Passport',to: '/passport' },
-    { icon: MessageCircle,   label: 'Communications', to: '/communications' },
+    { icon: Settings2,       label: 'Services',       to: '/admin/services' },
     { icon: Activity,        label: 'Health Check',   to: '/health-check' },
   ],
 };

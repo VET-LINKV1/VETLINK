@@ -9,11 +9,43 @@
  */
 const { supabaseAdmin } = require('../config/supabase');
 const paymongo = require('./paymongoClient');
-const { getPrice, formatPHP } = require('../config/pricing');
+const { getPrice: getStaticPrice, formatPHP } = require('../config/pricing');
 const notificationService = require('./notificationService');
 const logger = require('../utils/logger');
 
 const FRONTEND = () => process.env.PAYMONGO_RETURN_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+
+/**
+ * Get price from database services table, fallback to static pricing
+ */
+async function getPriceFromDb(serviceName) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('services')
+      .select('price')
+      .eq('label', serviceName)
+      .eq('is_active', true)
+      .single();
+
+    if (error) throw error;
+    if (data?.price !== null && data?.price !== undefined) {
+      return Math.round(data.price * 100); // Convert to centavos
+    }
+  } catch (e) {
+    logger.warn('payment.getPrice', 'Failed to load price from DB, using fallback', { msg: e.message, serviceName });
+  }
+  return null;
+}
+
+/**
+ * Get price for a service: try DB first, then static config
+ */
+async function getPrice(serviceName) {
+  const dbPrice = await getPriceFromDb(serviceName);
+  if (dbPrice !== null) return dbPrice;
+
+  return getStaticPrice(serviceName);
+}
 
 async function loadOwnedAppointment(appointmentId, userId) {
   const { data, error } = await supabaseAdmin
@@ -67,16 +99,18 @@ const paymentService = {
     const successUrl = `${FRONTEND()}/client/payment/success?appointmentId=${appointmentId}`;
     const cancelUrl  = `${FRONTEND()}/client/payment/failed?appointmentId=${appointmentId}`;
     const description = `${serviceName} for ${appt.pets?.name || 'pet'}${appt.vet?.name ? ' with ' + appt.vet.name : ''}`;
+    // Coerce amount to number — DB numeric columns can return strings
+    const amountNum = Number(amount);
     const lineItems = [{
       currency: 'PHP',
-      amount,
+      amount: amountNum,
       name: serviceName,
       quantity: 1,
       description,
     }];
 
     const sessionData = await paymongo.createCheckoutSession({
-      amount,
+      amount: amountNum,
       description,
       lineItems,
       successUrl,
@@ -95,6 +129,7 @@ const paymentService = {
       .upsert({
         appointment_id: appointmentId,
         user_id:        userId,
+        pet_id:         appt.pet_id || null,
         transaction_id: transactionId,
         amount,
         currency:       'PHP',
@@ -194,12 +229,20 @@ const paymentService = {
       return { paid: true, alreadyPaid: true, payment: existing };
     }
 
+    // Load the appointment so we can associate pet + build the invoice
+    const { data: apptData } = await supabaseAdmin
+      .from('appointments')
+      .select('id, type, service, amount, status, payment_status, client_id, vet_id, pet_id, appointment_at, pets(name)')
+      .eq('id', existing.appointment_id)
+      .single();
+
     // Update payment row
     const { data: updatedPayment, error: payErr } = await supabaseAdmin
       .from('payments')
       .update({
         status:         'paid',
         payment_method: payment_method || existing.payment_method,
+        pet_id:         existing.pet_id || apptData?.pet_id || null,
         raw_event:      raw || existing.raw_event,
         paid_at:        new Date().toISOString(),
       })
@@ -207,6 +250,15 @@ const paymentService = {
       .select()
       .single();
     if (payErr) throw new Error('Failed to mark paid: ' + payErr.message);
+
+    // Build the invoice: line item for the appointment service + generate record
+    await paymentService.generateInvoice({
+      payment: updatedPayment,
+      appointment: apptData,
+      petId: apptData?.pet_id || existing.pet_id,
+      userId: existing.user_id,
+      method: payment_method || existing.payment_method,
+    });
 
     // Transition appointment
     const { data: appt } = await supabaseAdmin
@@ -255,6 +307,67 @@ const paymentService = {
       .update({ status: 'failed', raw_event: raw || existing.raw_event })
       .eq('transaction_id', transactionId);
     logger.info('payment.markFailed', 'failed', { transactionId, reason });
+  },
+
+  /**
+   * Generate an invoice record for a completed payment.
+   * Associates the payment with owner, pet, appointment, and invoice per spec.
+   * Idempotent — if an invoice already exists for the payment, it returns it.
+   */
+  async generateInvoice({ payment, appointment, petId, userId, method }) {
+    try {
+      const { data: existingInvoice } = await supabaseAdmin
+        .from('invoices')
+        .select('*')
+        .eq('payment_id', payment.id)
+        .maybeSingle();
+      if (existingInvoice) return existingInvoice;
+
+      const serviceName = appointment?.service || appointment?.type || 'Veterinary Service';
+      const items = [{
+        description: serviceName,
+        amount:      payment.amount,
+        quantity:    1,
+        metadata:    {
+          appointmentId: appointment?.id || payment.appointment_id,
+          petId:        petId || null,
+          method:       method || null,
+        },
+      }];
+
+      const invNumRes = await supabaseAdmin.rpc('generate_invoice_number');
+      const invoiceNumber = invNumRes.data || `INV-${Date.now()}`;
+
+      const { data: invoice, error: invErr } = await supabaseAdmin
+        .from('invoices')
+        .insert({
+          payment_id:     payment.id,
+          appointment_id: payment.appointment_id,
+          user_id:        userId,
+          pet_id:         petId || null,
+          invoice_number: invoiceNumber,
+          amount:         payment.amount,
+          currency:       payment.currency || 'PHP',
+          status:         'paid',
+          items,
+          paid_at:        payment.paid_at || new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (invErr) {
+        logger.warn('payment.generateInvoice', 'invoice insert failed', { msg: invErr.message });
+        return null;
+      }
+
+      logger.info('payment.generateInvoice', 'invoice created', {
+        invoiceNumber, paymentId: payment.id, appointmentId: payment.appointment_id,
+      });
+      return invoice;
+    } catch (e) {
+      logger.warn('payment.generateInvoice', 'error', { msg: e.message });
+      return null;
+    }
   },
 };
 
