@@ -124,7 +124,7 @@ export default function ClientAppointmentsPage() {
   const canNext = useMemo(() => {
     if (step === 0) return !!bookPet;
     if (step === 1) return !!reason;
-    if (step === 2) return !!(slot?.vetId && slot?.slotISO);
+    if (step === 2) return !!slot?.slotISO;
     return true;
   }, [step, bookPet, reason, slot]);
 
@@ -347,7 +347,8 @@ export default function ClientAppointmentsPage() {
                           <MiniCard label="Pet"    value={bookPet?.name}    sub={`${bookPet?.species || ''}${bookPet?.breed ? ` · ${bookPet.breed}` : ''}`} />
                           <MiniCard label="Reason" value={reason?.label} sub={`${reason?.durationMins || 30} min`}
                             tone={reason?.code === 'emergency' ? 'red' : reason?.code === 'injury' ? 'amber' : 'blue'} />
-                          <MiniCard label="When"   value={slot ? new Date(slot.slotISO).toLocaleString() : '—'} />
+                          <MiniCard label="When"   value={slot ? new Date(slot.slotISO).toLocaleString() : '—'}
+                            sub="Preferred time — the clinic will confirm it" />
                         </div>
                         <label className="block">
                           <span className="block text-[10px] uppercase tracking-wider font-body font-600 text-slate-400 mb-1">

@@ -1,23 +1,21 @@
 /**
- * SlotPicker.jsx
+ * SlotPicker.jsx (client booking wizard — "Time" step)
  *
- * Two-stage picker:
- *   1. Date — a horizontal strip of the next 14 days
- *   2. Vet & slot — ranked vet cards, each with their nearest open slot.
- *      Click a card to lock that vet, then choose a different slot
- *      from their full slot list.
- *
- * For an emergency reason, the urgency-banner displays the earliest
- * available slot across all vets and lets the client book in one tap.
+ * Simplified by clinic request: the pet owner just tells us their
+ * preferred date and time, and -- optionally -- which vet they'd
+ * like. We no longer make them browse a computed list of open
+ * slots; front desk confirms the exact time (adjusting it if
+ * needed) and assigns/confirms a vet when they approve the
+ * booking, the same way they already do for reschedules.
  *
  * Props:
  *   reason        the selected reason object (from /booking/reasons)
  *   value         { date, vetId, slotISO }
  *   onChange(value)
  */
-import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Clock, User, Calendar, Siren, ChevronRight } from 'lucide-react';
-import { bookingService } from '../../services/bookingService';
+import { useEffect, useState } from 'react';
+import { Clock, User, Siren } from 'lucide-react';
+import { scheduleService } from '../../services/scheduleService';
 
 function dayLabel(d) {
   const wd = d.toLocaleDateString(undefined, { weekday: 'short' });
@@ -29,8 +27,9 @@ function toISODate(d) {
   const x = new Date(d.getTime() - offset * 60000);
   return x.toISOString().slice(0, 10);
 }
-function fmtTime(iso) {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+function vetSpecialization(v) {
+  const sp = Array.isArray(v.staff_profiles) ? v.staff_profiles[0] : v.staff_profiles;
+  return sp?.specialization || '';
 }
 
 export default function SlotPicker({ reason, value, onChange }) {
@@ -47,57 +46,32 @@ export default function SlotPicker({ reason, value, onChange }) {
     return arr;
   });
 
-  const [date, setDate]                 = useState(value?.date || toISODate(new Date()));
-  const [preferredTime, setPreferred]   = useState('09:00');
-  const [suggestions, setSuggestions]   = useState([]);
-  const [vetSlots, setVetSlots]         = useState({});      // vetId → [{slot_start,slot_end}]
-  const [selectedVet, setSelectedVet]   = useState(value?.vetId || null);
-  const [selectedSlot, setSelectedSlot] = useState(value?.slotISO || null);
-  const [loading, setLoading]           = useState(false);
-  const [err, setErr]                   = useState('');
+  const [date, setDate] = useState(value?.date || toISODate(new Date()));
+  const [time, setTime] = useState(() => {
+    if (value?.slotISO) return new Date(value.slotISO).toTimeString().slice(0, 5);
+    return '09:00';
+  });
+  const [vets, setVets]     = useState([]);
+  const [vetId, setVetId]   = useState(value?.vetId || '');
+  const [vetsErr, setVetsErr] = useState('');
 
-  // Load suggestions whenever date/reason/preferredTime changes
+  // Load the vet list once, for the optional "preferred vet" dropdown.
   useEffect(() => {
-    if (!reason) return;
     let cancelled = false;
-    (async () => {
-      setLoading(true); setErr(''); setSuggestions([]); setVetSlots({});
-      try {
-        const res = await bookingService.suggestVets({
-          reasonCode: reason.code,
-          date,
-          preferredTime: isEmergency ? null : preferredTime,
-          limit: 5,
-        });
-        if (!cancelled) setSuggestions(res?.suggestions || []);
-      } catch (e) {
-        if (!cancelled) setErr(e?.response?.data?.error || 'Could not load slots.');
-      } finally { if (!cancelled) setLoading(false); }
-    })();
+    scheduleService.getAllVets()
+      .then((v) => { if (!cancelled) setVets(v || []); })
+      .catch(() => { if (!cancelled) setVetsErr('Could not load the list of vets -- that\'s okay, you can still book without picking one.'); });
     return () => { cancelled = true; };
-  }, [reason?.code, date, preferredTime, isEmergency]);
+  }, []);
 
-  // When a vet is picked, load that vet's full slot list
+  // Propagate the chosen date + time (and optional vet) upstream as soon
+  // as we have a complete, valid local date/time.
   useEffect(() => {
-    if (!selectedVet) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const slots = await bookingService.getAvailableSlots(selectedVet, date);
-        if (!cancelled) setVetSlots((m) => ({ ...m, [selectedVet]: slots || [] }));
-      } catch (_) {}
-    })();
-    return () => { cancelled = true; };
-  }, [selectedVet, date]);
-
-  // Propagate value upstream when complete
-  useEffect(() => {
-    if (selectedVet && selectedSlot && date && onChange) {
-      onChange({ date, vetId: selectedVet, slotISO: selectedSlot });
-    }
-  }, [date, selectedVet, selectedSlot]); // eslint-disable-line
-
-  const top = suggestions[0];
+    if (!date || !time) return;
+    const local = new Date(`${date}T${time}:00`);
+    if (isNaN(local.getTime())) return;
+    onChange && onChange({ date, vetId: vetId || null, slotISO: local.toISOString() });
+  }, [date, time, vetId]); // eslint-disable-line
 
   return (
     <div className="space-y-4">
@@ -112,7 +86,7 @@ export default function SlotPicker({ reason, value, onChange }) {
             const { wd, md } = dayLabel(d);
             const active = date === iso;
             return (
-              <button key={iso} onClick={() => { setDate(iso); setSelectedVet(null); setSelectedSlot(null); }}
+              <button key={iso} type="button" onClick={() => setDate(iso)}
                 className={`shrink-0 min-w-[64px] rounded-xl border px-3 py-2 text-center transition-colors
                   ${active
                     ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20'
@@ -125,110 +99,50 @@ export default function SlotPicker({ reason, value, onChange }) {
         </div>
       </div>
 
-      {/* Preferred time (hidden for emergencies) */}
-      {!isEmergency && (
-        <div className="flex items-center gap-3 flex-wrap">
-          <p className="text-xs font-body font-600 uppercase tracking-wider text-slate-400">Preferred time</p>
-          <input type="time" value={preferredTime}
-            onChange={(e) => { setPreferred(e.target.value); setSelectedVet(null); setSelectedSlot(null); }}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-body bg-white" />
-          <p className="text-xs font-body text-slate-400">
-            We'll suggest vets with the nearest open slot.
-          </p>
-        </div>
-      )}
+      {/* Preferred time -- free text, no restriction to pre-computed slots */}
+      <div>
+        <p className="text-xs font-body font-600 uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
+          <Clock className="w-3.5 h-3.5" /> Preferred time
+        </p>
+        <input type="time" value={time} onChange={(e) => setTime(e.target.value)}
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-body bg-white w-40" />
+        <p className="text-xs font-body text-slate-400 mt-1.5">
+          Type in any time that works for you. The clinic will confirm this time
+          (or reach out to adjust it) when they approve your booking.
+        </p>
+      </div>
 
-      {/* Emergency banner */}
-      {isEmergency && top && (
+      {/* Optional preferred vet */}
+      <div>
+        <p className="text-xs font-body font-600 uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
+          <User className="w-3.5 h-3.5" /> Preferred veterinarian (optional)
+        </p>
+        <select value={vetId} onChange={(e) => setVetId(e.target.value)}
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-body bg-white w-full sm:w-72">
+          <option value="">No preference -- clinic will assign</option>
+          {vets.map((v) => {
+            const spec = vetSpecialization(v);
+            return <option key={v.id} value={v.id}>{v.name}{spec ? ` · ${spec}` : ''}</option>;
+          })}
+        </select>
+        {vetsErr && <p className="text-xs font-body text-slate-400 mt-1.5">{vetsErr}</p>}
+      </div>
+
+      {/* Emergency note */}
+      {isEmergency && (
         <div className="bg-gradient-to-br from-red-500 to-red-700 text-white rounded-2xl p-4 flex items-center gap-3 shadow-lg shadow-red-500/20">
-          <div className="w-11 h-11 rounded-2xl bg-white/15 flex items-center justify-center">
+          <div className="w-11 h-11 rounded-2xl bg-white/15 flex items-center justify-center shrink-0">
             <Siren className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-display font-700">Emergency — fast-tracked</p>
+            <p className="font-display font-700">Emergency -- front desk will be alerted immediately</p>
             <p className="text-sm opacity-90 font-body">
-              Earliest available: {top.vet_name} at {fmtTime(top.slot_start)}.
-              Booking will alert the front desk immediately.
+              We'll call you back right away to confirm the fastest time available --
+              the time above just tells us roughly when this started.
             </p>
           </div>
-          <button onClick={() => { setSelectedVet(top.vet_id); setSelectedSlot(top.slot_start); }}
-            className="bg-white text-red-700 px-3 py-2 rounded-xl text-sm font-body font-700">
-            Take this slot
-          </button>
         </div>
       )}
-
-      {/* Vet suggestions */}
-      <div>
-        <p className="text-xs font-body font-600 uppercase tracking-wider text-slate-400 mb-2">
-          {isEmergency ? 'All available vets today' : 'Suggested vets (ranked by nearest open slot)'}
-        </p>
-        {loading ? (
-          <div className="flex items-center justify-center h-24"><Loader2 className="w-5 h-5 animate-spin text-slate-300" /></div>
-        ) : err ? (
-          <p className="bg-red-50 border border-red-100 text-red-600 text-sm font-body px-3 py-2 rounded-lg">{err}</p>
-        ) : !suggestions.length ? (
-          <p className="text-sm text-slate-400 font-body text-center py-6 bg-slate-50 rounded-xl">
-            No vets have free slots on this date. Try another day.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {suggestions.map((s) => {
-              const active = selectedVet === s.vet_id;
-              return (
-                <li key={s.vet_id}>
-                  <button type="button"
-                    onClick={() => { setSelectedVet(s.vet_id); setSelectedSlot(s.slot_start); }}
-                    className={`w-full text-left bg-white dark:bg-slate-900 rounded-xl border p-3 transition-colors
-                      ${active ? 'border-blue-400 ring-2 ring-blue-200' : 'border-slate-100 hover:border-blue-300'}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
-                        <User className="w-4 h-4 text-blue-600" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-body font-600 text-slate-700 dark:text-slate-200 truncate">
-                          {s.vet_name}
-                          {s.specialization && <span className="ml-2 text-[10px] font-600 text-slate-400 uppercase tracking-wider">{s.specialization}</span>}
-                        </p>
-                        <p className="text-xs text-slate-500 font-body">
-                          Nearest: <span className="font-600 text-slate-700 dark:text-slate-200">{fmtTime(s.slot_start)}</span>
-                          {' · '}{s.load_today} on schedule today
-                          {!isEmergency && s.delta_mins != null ? ` · ${s.delta_mins} min from your preferred time` : ''}
-                        </p>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-slate-300" />
-                    </div>
-                  </button>
-
-                  {/* Full slot list for the selected vet */}
-                  {active && vetSlots[selectedVet] && (
-                    <div className="mt-2 ml-4 pl-3 border-l-2 border-blue-200">
-                      <p className="text-xs font-body text-slate-400 uppercase tracking-wider mb-1.5">
-                        All open slots
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {vetSlots[selectedVet].map((sl) => {
-                          const isSel = selectedSlot === sl.slot_start;
-                          return (
-                            <button key={sl.slot_start} type="button"
-                              onClick={() => setSelectedSlot(sl.slot_start)}
-                              className={`text-xs font-body font-600 px-2.5 py-1 rounded-lg border transition-colors
-                                ${isSel
-                                  ? 'bg-blue-600 text-white border-blue-600'
-                                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
-                              {fmtTime(sl.slot_start)}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
     </div>
   );
 }
