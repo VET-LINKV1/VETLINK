@@ -22,6 +22,11 @@ const schemas = {
     scheduledAt:   Joi.date().iso().allow(null),
   }),
 
+  setMessagingStatus: Joi.object({
+    disabled: Joi.boolean().required(),
+    reason:   Joi.string().max(500).allow('', null),
+  }),
+
   endConsultation: Joi.object({
     cancel:        Joi.boolean(),
     cancelReason:  Joi.string().max(500).allow('', null),

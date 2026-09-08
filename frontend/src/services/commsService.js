@@ -14,6 +14,8 @@ export const commsService = {
     apiClient.get(`/comms/conversations/${id}`, { params: { limit, before } }).then(unwrap),
   markRead: (id) =>
     apiClient.post(`/comms/conversations/${id}/read`).then(unwrap),
+  setMessagingStatus: (id, disabled, reason) =>
+    apiClient.put(`/comms/conversations/${id}/messaging`, { disabled, reason }).then(unwrap),
 
   // Messages
   sendMessage: (payload) =>

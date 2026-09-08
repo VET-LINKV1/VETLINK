@@ -15,7 +15,7 @@ import MessageBubble    from '../../components/comms/MessageBubble';
 import ChatComposer     from '../../components/comms/ChatComposer';
 import {
   MessageCircle, Video, Loader2, User, Clock,
-  CheckCircle2, XCircle, Plus, Phone, Mail,
+  CheckCircle2, XCircle, Plus, Phone, Mail, BellOff, Bell,
 } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 
@@ -124,11 +124,12 @@ function MessagesTab({ user }) {
 
   const {
     conversation, messages, loading, error,
-    send, uploadAttachment,
+    send, uploadAttachment, reload,
   } = useConversation(activeId);
 
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress]   = useState(0);
+  const [togglingMsg, setTogglingMsg] = useState(false);
   const endRef = useRef(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -143,6 +144,34 @@ function MessagesTab({ user }) {
     try { await uploadAttachment(file, {}, setProgress); }
     catch (e) { console.error('[Comms] upload failed', e?.response?.data || e); }
     finally { setUploading(false); setProgress(0); }
+  };
+
+  // Pause/resume this client's ability to message in — a quick way
+  // to give the vet breathing room from a difficult pet owner
+  // without losing the conversation or blocking the vet's own replies.
+  const handleToggleMessaging = async () => {
+    if (!conversation) return;
+    const willDisable = !conversation.messaging_disabled;
+    let reason;
+    if (willDisable) {
+      const promptResult = window.prompt(
+        "Optional: note why you're pausing messaging for this client (only staff can see this). Click Cancel to not pause."
+      );
+      if (promptResult === null) return; // vet cancelled the whole action
+      reason = promptResult.trim() || undefined;
+    } else if (!window.confirm('Re-enable messaging for this client?')) {
+      return;
+    }
+    setTogglingMsg(true);
+    try {
+      await commsService.setMessagingStatus(conversation.id, willDisable, reason);
+      await reload();
+      await loadList();
+    } catch (e) {
+      alert(e?.response?.data?.error || 'Failed to update messaging status.');
+    } finally {
+      setTogglingMsg(false);
+    }
   };
 
   return (
@@ -188,7 +217,33 @@ function MessagesTab({ user }) {
                   <p className="text-[11px] font-body text-slate-400 truncate">{conversation.client_email}</p>
                 )}
               </div>
+              {conversation && (
+                <button type="button" onClick={handleToggleMessaging} disabled={togglingMsg}
+                  title={conversation.messaging_disabled
+                    ? 'Let this client send messages again'
+                    : 'Stop this client from sending new messages — useful for a difficult or abusive pet owner'}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-body font-600 shrink-0 transition-colors disabled:opacity-50
+                    ${conversation.messaging_disabled
+                      ? 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+                      : 'bg-slate-50 dark:bg-white/5 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10'}`}>
+                  {togglingMsg
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : conversation.messaging_disabled ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
+                  {conversation.messaging_disabled ? 'Paused — re-enable' : 'Pause messaging'}
+                </button>
+              )}
             </div>
+
+            {conversation?.messaging_disabled && (
+              <div className="px-4 py-2 bg-amber-50 dark:bg-amber-500/10 border-b border-amber-100 dark:border-amber-500/20 flex items-center gap-2">
+                <BellOff className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <p className="text-xs font-body text-amber-700 dark:text-amber-400">
+                  This client can't send new messages right now
+                  {conversation.messaging_disabled_reason ? ` — ${conversation.messaging_disabled_reason}` : '.'}
+                  {' '}You can still reply.
+                </p>
+              </div>
+            )}
 
             {/* Stream */}
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2 scrollbar-thin">

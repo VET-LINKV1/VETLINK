@@ -179,6 +179,8 @@ function ClientMessagesTab({ user }) {
         onAttach={handleAttach}
         uploading={uploading}
         progress={progress}
+        disabled={!!conversation?.messaging_disabled}
+        disabledMessage="The clinic has temporarily paused messaging on this conversation. Please call the clinic directly if you need to reach them."
       />
     </div>
   );

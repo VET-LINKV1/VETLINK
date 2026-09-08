@@ -166,6 +166,59 @@ const commsService = {
   },
 
 
+  /**
+   * Pause or resume a client's ability to send new messages on a
+   * conversation. Only clinical staff can toggle this -- meant to
+   * give a vet/admin/staff a quick way to stop a difficult or
+   * abusive pet owner from continuing to message, without losing
+   * the chat history or the clinic's own ability to reply.
+   * A visible system note is left in the thread either way.
+   */
+  async setMessagingStatus(actorId, actorRole, conversationId, { disabled, reason } = {}) {
+    if (!STAFF_ROLES.includes(actorRole)) throw new Error('Access denied.');
+    if (typeof disabled !== 'boolean') throw new Error('disabled must be true or false.');
+    if (!conversationId) throw new Error('conversationId is required.');
+
+    const { data: existing } = await supabaseAdmin
+      .from('conversations').select('id').eq('id', conversationId).single();
+    if (!existing) throw new Error('Conversation not found.');
+
+    const patch = disabled
+      ? {
+          messaging_disabled:        true,
+          messaging_disabled_reason: reason || null,
+          messaging_disabled_at:     new Date().toISOString(),
+          messaging_disabled_by:     actorId,
+        }
+      : {
+          messaging_disabled:        false,
+          messaging_disabled_reason: null,
+          messaging_disabled_at:     null,
+          messaging_disabled_by:     null,
+        };
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('conversations').update(patch).eq('id', conversationId)
+      .select('*').single();
+    if (error) throw new Error(error.message);
+
+    // Leave a visible, permanent note in the thread so any staff
+    // opening it later understands why the client couldn't message in.
+    try {
+      await supabaseAdmin.from('messages').insert({
+        conversation_id: conversationId,
+        sender_id:       actorId,
+        sender_role:      actorRole,
+        kind:             'system',
+        body: disabled
+          ? `Messaging paused for this conversation${reason ? ' — ' + reason : ''}.`
+          : 'Messaging re-enabled for this conversation.',
+      });
+    } catch (_) {}
+
+    return updated;
+  },
+
   /* ──────────────────────────────────────────────────────────────
    * MESSAGES
    * ──────────────────────────────────────────────────────────── */
@@ -180,6 +233,9 @@ const commsService = {
 
     if (role === 'client') {
       const conv = await getOrCreateConversation(actorId);
+      if (conv.messaging_disabled) {
+        throw new Error('Messaging is currently paused for your account. Please call the clinic directly if this is urgent.');
+      }
       conversationId = conv.id;
     } else {
       if (!STAFF_ROLES.includes(role)) throw new Error('Access denied.');

@@ -18,6 +18,9 @@ router.use(auth);
 router.get('/conversations',                        ctl.listConversations);
 router.get('/conversations/:id',                    ctl.getConversation);
 router.post('/conversations/:id/read',              ctl.markRead);
+router.put('/conversations/:id/messaging',
+  roleMiddleware('admin','veterinarian','staff'),
+  validateBody('setMessagingStatus'),                ctl.setMessagingStatus);
 
 /* Messages */
 router.post('/messages',

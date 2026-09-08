@@ -34,6 +34,15 @@ const commsController = {
     try { res.json({ success: true, data: await svc.markRead(req.params.id, req.user.id, req.user.role) }); }
     catch (e) { fail(res, e); }
   },
+  async setMessagingStatus(req, res) {
+    try {
+      const data = await svc.setMessagingStatus(req.user.id, req.user.role, req.params.id, {
+        disabled: req.body.disabled,
+        reason:   req.body.reason,
+      });
+      res.json({ success: true, data });
+    } catch (e) { fail(res, e); }
+  },
 
   // Messages
   async sendMessage(req, res) {

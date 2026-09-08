@@ -9,7 +9,7 @@
  *   searchable   default true
  */
 import { useMemo, useState } from 'react';
-import { Search, User, MessageCircle, Stethoscope } from 'lucide-react';
+import { Search, User, MessageCircle, Stethoscope, BellOff } from 'lucide-react';
 
 function fmtRelative(d) {
   if (!d) return '';
@@ -75,6 +75,11 @@ export default function ConversationList({ items = [], selectedId, onSelect, sea
                           <p className="text-sm font-body font-600 text-slate-700 dark:text-slate-200 truncate flex-1">
                             {c.client_name || '— client —'}
                           </p>
+                          {c.messaging_disabled && (
+                            <span title="Messaging paused for this client" className="text-amber-600 shrink-0">
+                              <BellOff className="w-3 h-3" />
+                            </span>
+                          )}
                           <span className="text-[10px] text-slate-400 shrink-0">
                             {fmtRelative(c.last_message_at)}
                           </span>

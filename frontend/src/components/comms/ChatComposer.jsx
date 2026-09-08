@@ -6,16 +6,32 @@
  * Props:
  *   onSend(text)
  *   onAttach(file)
- *   uploading      boolean — disables UI while attaching
- *   progress       0..100 if uploading
+ *   uploading        boolean — disables UI while attaching
+ *   progress         0..100 if uploading
  *   placeholder
+ *   disabled         boolean — hides the input entirely and shows
+ *                    disabledMessage instead (e.g. messaging paused
+ *                    by the clinic)
+ *   disabledMessage  text shown when disabled
  */
 import { useRef, useState } from 'react';
-import { Send, Paperclip, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Send, Paperclip, Image as ImageIcon, Loader2, BellOff } from 'lucide-react';
 
-export default function ChatComposer({ onSend, onAttach, uploading = false, progress = 0, placeholder = 'Type a message…' }) {
+export default function ChatComposer({
+  onSend, onAttach, uploading = false, progress = 0, placeholder = 'Type a message…',
+  disabled = false, disabledMessage = "Messaging is currently paused for this conversation.",
+}) {
   const [text, setText] = useState('');
   const inputRef = useRef(null);
+
+  if (disabled) {
+    return (
+      <div className="border-t border-slate-100 dark:border-white/10 p-3 bg-slate-50 dark:bg-white/5 flex items-center gap-2.5">
+        <BellOff className="w-4 h-4 text-slate-400 shrink-0" />
+        <p className="text-sm font-body text-slate-500 dark:text-slate-400">{disabledMessage}</p>
+      </div>
+    );
+  }
 
   const submit = async (e) => {
     e?.preventDefault();
