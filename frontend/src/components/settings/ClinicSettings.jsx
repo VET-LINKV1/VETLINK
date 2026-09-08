@@ -47,7 +47,7 @@ export default function ClinicSettings() {
 
   useEffect(() => {
     settingsService.getSection('clinic')
-      .then(d => { setData(d); setLogoPreview(d.logoUrl); setHours(d.hours); setLoading(false); })
+      .then(d => { setData(d); setLogoPreview(d.logoUrl); setHours(d.operatingHours || []); setLoading(false); })
       .catch(e => { console.error(e); setError('Failed to load clinic settings. Is the backend running and the Phase 20 migration applied?'); setLoading(false); });
   }, []);
 
@@ -60,7 +60,7 @@ export default function ClinicSettings() {
 
   const handleSave = async () => {
     setSaving(true);
-    await settingsService.updateSection('clinic', { ...data, hours, logoUrl: logoPreview }, `Updated clinic settings: ${data.name}`);
+    await settingsService.updateSection('clinic', { ...data, operatingHours: hours, logoUrl: logoPreview }, `Updated clinic settings: ${data.name}`);
     setLastSaved(`Saved ${new Date().toLocaleTimeString()}`);
     setSaving(false);
   };
@@ -70,7 +70,7 @@ export default function ClinicSettings() {
     const d = await settingsService.getSection('clinic');
     setData(d);
     setLogoPreview(d.logoUrl);
-    setHours(d.hours);
+    setHours(d.operatingHours || []);
   };
 
   const handleLogoChange = (e) => {
