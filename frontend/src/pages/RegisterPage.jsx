@@ -16,7 +16,7 @@ import { clientService } from '../services/clientService';
 import { staffAuthService } from '../services/staffAuthService';
 import {
   User, Mail, Lock, Phone, MapPin, PawPrint,
-  ShieldCheck, Stethoscope, Users, UserCircle,
+  Stethoscope, Users, UserCircle,
   ChevronRight, ChevronLeft, Eye, EyeOff,
   CheckCircle, AlertCircle, Loader2,
 } from 'lucide-react';
@@ -44,17 +44,6 @@ const ROLES = [
     color: 'from-sky-500 to-sky-600',
     active: 'bg-sky-600 border-sky-600',
     light: 'bg-sky-50 border-sky-200 text-sky-700',
-    requiresOTP: false,
-  },
-  {
-    value: 'admin',
-    label: 'Administrator',
-    desc: 'Full system access and user management',
-    icon: ShieldCheck,
-    color: 'from-violet-500 to-violet-600',
-    active: 'bg-violet-600 border-violet-600',
-    light: 'bg-violet-50 border-violet-200 text-violet-700',
-    requiresOTP: true,
   },
   {
     value: 'veterinarian',
@@ -64,7 +53,6 @@ const ROLES = [
     color: 'from-blue-500 to-blue-600',
     active: 'bg-blue-600 border-blue-600',
     light: 'bg-blue-50 border-blue-200 text-blue-700',
-    requiresOTP: true,
   },
   {
     value: 'staff',
@@ -74,7 +62,6 @@ const ROLES = [
     color: 'from-teal-500 to-teal-600',
     active: 'bg-teal-600 border-teal-600',
     light: 'bg-teal-50 border-teal-200 text-teal-700',
-    requiresOTP: true,
   },
 ];
 
@@ -117,8 +104,6 @@ export default function RegisterPage() {
     licenseNumber: '', specialization: '',
     // Staff
     position: '',
-    // Admin
-    organizationName: '',
   });
 
   const selectedRole = ROLES.find(r => r.value === role);
@@ -201,7 +186,7 @@ export default function RegisterPage() {
         setAuth(result);
         navigate('/client');
       } else {
-        // Staff/Admin/Vet — requires OTP verification
+        // Staff / Vet — OTP verification is disabled; account is created right away.
         const regResult = await staffAuthService.register({
           fullName:       account.fullName,
           email:          account.email,
@@ -211,12 +196,13 @@ export default function RegisterPage() {
           licenseNumber:  details.licenseNumber  || undefined,
           specialization: details.specialization || undefined,
           position:       details.position       || undefined,
-          organizationName: details.organizationName || undefined,
         });
-        // staffAuthService.register returns { success, data: { phone, devOTP, delivered, provider } }
-        const devOTP = regResult?.data?.devOTP || null;
-        navigate('/staff/verify-otp', {
-          state: { phone: account.phoneNumber, devOTP },
+        navigate('/login', {
+          state: {
+            justRegistered: true,
+            email: regResult?.data?.email || account.email,
+            message: 'Account created — please sign in.',
+          },
         });
       }
     } catch (err) {
@@ -401,14 +387,7 @@ export default function RegisterPage() {
                         <Icon className={`w-6 h-6 ${selected ? 'text-white' : 'text-slate-500'}`} />
                       </div>
                       <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className={`font-display font-700 text-sm ${selected ? 'text-white' : 'text-slate-800'}`}>{r.label}</p>
-                          {r.requiresOTP && (
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-body ${selected ? 'bg-white/20 text-white/80' : 'bg-amber-100 text-amber-600'}`}>
-                              OTP required
-                            </span>
-                          )}
-                        </div>
+                        <p className={`font-display font-700 text-sm ${selected ? 'text-white' : 'text-slate-800'}`}>{r.label}</p>
                         <p className={`text-xs font-body mt-0.5 ${selected ? 'text-white/70' : 'text-slate-400'}`}>{r.desc}</p>
                       </div>
                       {selected && <CheckCircle className="w-5 h-5 text-white shrink-0" />}
@@ -545,11 +524,6 @@ export default function RegisterPage() {
                     </select>
                     {errors.specialization && <p className="mt-1 text-xs text-red-500">{errors.specialization}</p>}
                   </div>
-                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
-                    <p className="text-amber-700 text-xs font-body">
-                      📱 An OTP will be sent to <span className="font-600">{account.phoneNumber}</span> to verify your account.
-                    </p>
-                  </div>
                 </div>
               )}
 
@@ -576,27 +550,6 @@ export default function RegisterPage() {
                     </div>
                     {errors.position && <p className="mt-1 text-xs text-red-500">{errors.position}</p>}
                   </div>
-                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
-                    <p className="text-amber-700 text-xs font-body">
-                      📱 An OTP will be sent to <span className="font-600">{account.phoneNumber}</span> to verify your account.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* ── ADMIN fields ── */}
-              {role === 'admin' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5 font-body">Organization Name (optional)</label>
-                    <input value={details.organizationName} onChange={e => setDet('organizationName', e.target.value)}
-                      placeholder="Pet Healthcare Veterinary Clinic" className={inputClass()} />
-                  </div>
-                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
-                    <p className="text-amber-700 text-xs font-body">
-                      📱 An OTP will be sent to <span className="font-600">{account.phoneNumber}</span> to verify your account.
-                    </p>
-                  </div>
                 </div>
               )}
 
@@ -608,8 +561,8 @@ export default function RegisterPage() {
                 <button onClick={next} disabled={loading}
                   className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-display font-600 text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 disabled:opacity-60 transition-all">
                   {loading
-                    ? <><Loader2 className="w-4 h-4 animate-spin" /> {role === 'client' ? 'Creating...' : 'Sending OTP...'}</>
-                    : role === 'client' ? 'Create Account' : 'Register & Verify'}
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</>
+                    : 'Create Account'}
                 </button>
               </div>
             </div>

@@ -26,6 +26,16 @@ const profileController = {
       res.status(500).json({ success: false, error: err.message });
     }
   },
+  async changePassword(req, res) {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      const result = await profileService.changePassword(req.user.id, req.user.email, currentPassword, newPassword);
+      res.json({ success: true, message: 'Password updated successfully.', data: result });
+    } catch (err) {
+      const isAuthError = err.message === 'Current password is incorrect';
+      res.status(isAuthError ? 401 : 400).json({ success: false, error: err.message });
+    }
+  },
 };
 
 module.exports = profileController;

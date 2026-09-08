@@ -11,6 +11,7 @@
  */
 const { supabaseAdmin } = require('../config/supabase');
 const crypto = require('crypto');
+const logger = require('../utils/logger');
 
 const ROLES = ['admin', 'veterinarian', 'staff', 'client'];
 
@@ -326,32 +327,85 @@ const userManagementService = {
     const before = await this.getUser(id).catch(() => null);
     if (!before) return { ok: true };
 
-    // Remove records that reference public.users(id) without ON DELETE CASCADE.
-    // If the migration from phase15_user_delete_cascade.sql has been run, this
-    // pre-cleanup is redundant but harmless.
+    // Remove/detach every record that references public.users(id), so the
+    // auth user can always be deleted regardless of whether the DB-level
+    // CASCADE/SET NULL migrations (phase15_user_delete_cascade.sql and
+    // later fix-ups) have actually been applied on this project. Each
+    // operation is independently fault-tolerant — a table that doesn't
+    // exist yet, or one that already cascades at the DB level, must never
+    // block the others.
+    // Collect (rather than just log) any pre-cleanup failure that ISN'T
+    // "this table doesn't exist" — those are almost always a real
+    // constraint violation (e.g. trying to null out a NOT NULL column)
+    // and are exactly what we need to see if the final delete still fails.
+    const cleanupIssues = [];
+    const safe = (label, p) => Promise.resolve(p).then(({ error } = {}) => {
+      if (error && !/relation .* does not exist|schema cache/i.test(error.message)) {
+        cleanupIssues.push(`${label}: ${error.message}`);
+      }
+    }).catch((e) => {
+      if (!/relation .* does not exist|schema cache/i.test(e.message || '')) {
+        cleanupIssues.push(`${label}: ${e.message}`);
+      }
+    });
+
+    // "Owner" columns — the record only makes sense tied to this user, so
+    // it's deleted outright (mirrors ON DELETE CASCADE). appointments is
+    // handled separately below since both client_id and vet_id qualify.
+    // NOTE: any column that is NOT NULL must go here, not in nullOuts —
+    // you can't null out a NOT NULL column (emr_files.uploaded_by was
+    // wrongly treated as nullable before, which is exactly what kept
+    // blocking deletes even after the previous fix).
+    const deletes = [
+      ['medical_records',         'vet_id'],
+      ['payments',                'user_id'],
+      ['soap_notes',              'vet_id'],
+      ['prescriptions',           'vet_id'],
+      ['treatments',              'vet_id'],
+      ['refill_requests',         'requested_by'],
+      ['discharge_instructions',  'vet_id'],
+      ['passport_shares',         'created_by'],
+      ['messages',                'sender_id'],
+      ['emr_files',               'uploaded_by'],  // NOT NULL — must delete, not null out
+    ];
+
+    // "Who performed this action" columns — nullable, so the record
+    // belongs to someone else and survives; only the reference to this
+    // user is cleared (mirrors ON DELETE SET NULL).
+    const nullOuts = [
+      ['appointments',                 'triaged_by'],
+      ['appointments',                 'approved_by'],
+      ['appointments',                 'cancelled_by'],
+      ['appointments',                 'declined_by'],
+      ['conversations',                'assigned_vet_id'],
+      ['vaccinations',                 'vet_id'],
+      ['pet_weights',                  'recorded_by'],
+      ['appointment_intakes',          'submitted_by'],
+      ['refill_requests',              'processed_by'],
+      ['video_consultations',          'vet_id'],
+      ['video_consultations',          'created_by'],
+      ['health_check_results',         'performed_by'],
+      ['prescriptive_resource_usage',  'used_by'],
+      ['prescriptive_actions',         'acted_by'],
+    ];
+
     await Promise.all([
-      supabaseAdmin.from('appointments').delete().or(`client_id.eq.${id},vet_id.eq.${id}`),
-      supabaseAdmin.from('medical_records').delete().eq('vet_id', id),
-      supabaseAdmin.from('payments').delete().eq('user_id', id),
-      supabaseAdmin.from('prescriptions').delete().eq('vet_id', id),
-      supabaseAdmin.from('treatments').delete().eq('vet_id', id),
-      supabaseAdmin.from('refill_requests').delete().eq('requested_by', id),
-      supabaseAdmin.from('discharge_instructions').delete().eq('vet_id', id),
-      supabaseAdmin.from('passport_shares').delete().eq('created_by', id),
-      supabaseAdmin.from('messages').delete().eq('sender_id', id),
+      safe('appointments(client/vet)', supabaseAdmin.from('appointments').delete().or(`client_id.eq.${id},vet_id.eq.${id}`)),
+      ...deletes.map(([table, column]) => safe(`${table}.${column} (delete)`, supabaseAdmin.from(table).delete().eq(column, id))),
+      ...nullOuts.map(([table, column]) => safe(`${table}.${column} (null out)`, supabaseAdmin.from(table).update({ [column]: null }).eq(column, id))),
     ]);
 
     // Delete the Supabase Auth user; ON DELETE CASCADE on public.users.id
-    // removes the profile row and all cascaded children automatically.
+    // removes the profile row and any remaining cascaded children.
     try {
       const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
       if (error) throw error;
     } catch (e) {
-      logger.error('deleteUser', `Failed to delete auth user ${id}: ${e.message}`);
-      throw new Error(
-        'Could not delete account: ' + e.message +
-        '. Run database/phase15_user_delete_cascade.sql in Supabase SQL Editor to fix missing FK cascades.'
-      );
+      logger.error('deleteUser', `Failed to delete auth user ${id}: ${e.message}`, { cleanupIssues });
+      const detail = cleanupIssues.length
+        ? ' Pre-cleanup could not fully clear: ' + cleanupIssues.join('; ') + '.'
+        : ' No pre-cleanup step reported an error, so this is likely a table not yet accounted for at all.';
+      throw new Error('Could not delete account: ' + e.message + '.' + detail);
     }
 
     await log(actorId, null, 'delete_user', {

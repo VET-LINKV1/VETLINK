@@ -15,4 +15,8 @@ export const profileService = {
     const { data } = await apiClient.post('/profile/avatar', formData);
     return data.data;
   },
+  async changePassword(currentPassword, newPassword) {
+    const { data } = await apiClient.put('/profile/password', { currentPassword, newPassword });
+    return data.data;
+  },
 };

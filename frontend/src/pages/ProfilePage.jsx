@@ -11,6 +11,7 @@ import { profileService } from '../services/profileService';
 import { clientService } from '../services/clientService';
 import AvatarUpload from '../components/profile/AvatarUpload';
 import ProfileField from '../components/profile/ProfileField';
+import ChangePasswordModal from '../components/profile/ChangePasswordModal';
 import {
   Edit2, Save, X, CheckCircle, AlertCircle,
   Loader2, Shield, Stethoscope, Users, UserCircle,
@@ -43,6 +44,8 @@ export default function ProfilePage() {
   const [errors, setErrors]       = useState({});
   const [smsOptIn, setSmsOptIn]   = useState(true);
   const [smsLoading, setSmsLoading] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordChanged, setPasswordChanged] = useState(false);
 
   // Edit state mirrors profile
   const [form, setForm] = useState({});
@@ -176,6 +179,13 @@ export default function ProfilePage() {
         <div className="flex items-center gap-3 p-4 rounded-xl bg-blue-50 border border-blue-100">
           <CheckCircle className="w-5 h-5 text-blue-500 shrink-0" />
           <p className="text-blue-700 font-body text-sm font-500">Profile updated successfully!</p>
+        </div>
+      )}
+
+      {passwordChanged && (
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-green-50 border border-green-100">
+          <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
+          <p className="text-green-700 font-body text-sm font-500">Password changed successfully!</p>
         </div>
       )}
 
@@ -431,9 +441,11 @@ export default function ProfilePage() {
         <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-white/10 dark:border-white/10">
           <div>
             <p className="font-body text-slate-700 dark:text-slate-200 text-sm font-500">Password</p>
-            <p className="font-body text-slate-400 dark:text-slate-500 text-xs">Last changed: unknown</p>
+            <p className="font-body text-slate-400 dark:text-slate-500 text-xs">Keep your account secure with a strong password</p>
           </div>
-          <button className="px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 dark:text-slate-600 text-sm font-body font-500 hover:bg-slate-50 dark:bg-slate-800/50 transition-all">
+          <button
+            onClick={() => setShowPasswordModal(true)}
+            className="px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 dark:text-slate-600 text-sm font-body font-500 hover:bg-slate-50 dark:bg-slate-800/50 transition-all">
             Change Password
           </button>
         </div>
@@ -483,6 +495,17 @@ export default function ProfilePage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ── Change Password modal ── */}
+      {showPasswordModal && (
+        <ChangePasswordModal
+          onClose={() => setShowPasswordModal(false)}
+          onChanged={() => {
+            setPasswordChanged(true);
+            setTimeout(() => setPasswordChanged(false), 3000);
+          }}
+        />
       )}
     </div>
   );

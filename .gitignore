@@ -24,3 +24,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Local backups from cleanup scripts (contains user PII, never commit)
+backend/backups/

@@ -2,6 +2,8 @@ const { Router } = require('express');
 const multer = require('multer');
 const profileController = require('../controllers/profileController');
 const authMiddleware = require('../middleware/authMiddleware');
+const { validateMiddleware } = require('../middleware/validateMiddleware');
+const schemas = require('../validations/profileValidation');
 
 const router = Router();
 
@@ -14,8 +16,9 @@ const upload = multer({
 });
 
 router.use(authMiddleware);
-router.get('/',        profileController.getProfile);
-router.put('/',        profileController.updateProfile);
-router.post('/avatar', upload.single('avatar'), profileController.uploadAvatar);
+router.get('/',         profileController.getProfile);
+router.put('/',         profileController.updateProfile);
+router.post('/avatar',  upload.single('avatar'), profileController.uploadAvatar);
+router.put('/password', validateMiddleware(schemas.changePassword), profileController.changePassword);
 
 module.exports = router;

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { staffAuthService } from '../../services/staffAuthService';
 import {
   Eye, EyeOff, User, Mail, Lock, Phone,
-  ShieldCheck, Stethoscope, Users, AlertCircle, Loader2,
+  Stethoscope, Users, AlertCircle, Loader2,
   ChevronRight, CheckCircle,
 } from 'lucide-react';
 
@@ -22,16 +22,6 @@ const STRENGTH_TEXT   = ['', 'text-red-500', 'text-amber-500', 'text-blue-500', 
 
 // ── Role config ────────────────────────────────────────────────
 const ROLES = [
-  {
-    value: 'admin',
-    label: 'Administrator',
-    short: 'Admin',
-    icon: ShieldCheck,
-    desc: 'Full system access and user management',
-    color: 'from-violet-500 to-violet-600',
-    light: 'bg-violet-50 border-violet-200 text-violet-700',
-    active: 'bg-violet-600 border-violet-600',
-  },
   {
     value: 'veterinarian',
     label: 'Vet Doctor',
@@ -129,18 +119,13 @@ function StaffRegisterPage() {
   const nextStep = () => {
     if (step === 1 && !validateStep1()) return;
     if (step === 2 && !validateStep2()) return;
-    // Admin skips step 3
-    if (step === 2 && form.role === 'admin') {
-      handleSubmit();
-      return;
-    }
     setStep(s => s + 1);
   };
 
   const prevStep = () => { setErrors({}); setStep(s => s - 1); };
 
   const handleSubmit = async () => {
-    if (form.role !== 'admin' && !validateStep3()) return;
+    if (!validateStep3()) return;
     setLoading(true);
     setServerError('');
     try {
@@ -154,18 +139,14 @@ function StaffRegisterPage() {
         specialization: form.specialization || undefined,
         position:       form.position       || undefined,
       });
-      // SMS disabled on the backend → account is already created; skip OTP.
-      if (_regRes?.data?.skippedOtp) {
-        navigate('/login', {
-          state: {
-            justRegistered: true,
-            email: _regRes?.data?.email || form.email,
-            message: 'Account created — please sign in.',
-          },
-        });
-        return;
-      }
-      navigate('/staff/verify-otp', { state: { phone: form.phoneNumber, devOTP: _regRes?.data?.devOTP || null } });
+      // OTP verification is disabled — the account is created right away.
+      navigate('/login', {
+        state: {
+          justRegistered: true,
+          email: _regRes?.data?.email || form.email,
+          message: 'Account created — please sign in.',
+        },
+      });
     } catch (err) {
       setServerError(err?.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
@@ -180,7 +161,7 @@ function StaffRegisterPage() {
   `;
 
   // ── Step indicator ──────────────────────────────────────────
-  const stepsToShow = form.role === 'admin' ? STEPS.slice(0, 2) : STEPS;
+  const stepsToShow = STEPS;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-slate-50 flex items-center justify-center p-4 py-10">
@@ -360,7 +341,7 @@ function StaffRegisterPage() {
               {/* Phone */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5 font-body">
-                  Phone Number * <span className="text-slate-400 text-xs font-normal">— for OTP verification</span>
+                  Phone Number *
                 </label>
                 <div className="relative">
                   <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -377,10 +358,7 @@ function StaffRegisterPage() {
                 </button>
                 <button onClick={nextStep} disabled={loading}
                   className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-display font-600 text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 disabled:opacity-60 transition-all">
-                  {form.role === 'admin'
-                    ? loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending OTP...</> : 'Register & Send OTP'
-                    : <>Continue <ChevronRight className="w-4 h-4" /></>
-                  }
+                  Continue <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -456,8 +434,8 @@ function StaffRegisterPage() {
                 <button onClick={handleSubmit} disabled={loading}
                   className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-display font-600 text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 disabled:opacity-60 transition-all">
                   {loading
-                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending OTP...</>
-                    : 'Register & Send OTP'}
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating account...</>
+                    : 'Create Account'}
                 </button>
               </div>
             </div>

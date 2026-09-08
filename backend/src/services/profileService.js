@@ -1,4 +1,4 @@
-const { supabaseAdmin } = require('../config/supabase');
+const { supabase, supabaseAdmin } = require('../config/supabase');
 const logger = require('../utils/logger');
 
 const STORAGE_BUCKET = 'avatars';
@@ -59,6 +59,34 @@ const profileService = {
 
     logger.info('profile.update', 'updated', { userId, fields: Object.keys(updateData) });
     return profileService.getProfile(userId);
+  },
+
+  /**
+   * Change the signed-in user's own password.
+   * Re-authenticates with the current password first (so a stolen/left-open
+   * session can't be used to silently take over the account), then uses the
+   * Supabase service-role client to set the new one.
+   */
+  async changePassword(userId, email, currentPassword, newPassword) {
+    // 1. Verify the current password by attempting a real sign-in.
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    });
+    if (signInError) {
+      throw new Error('Current password is incorrect');
+    }
+
+    // 2. Update the password via the admin (service-role) client.
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      password: newPassword,
+    });
+    if (updateError) {
+      throw new Error('Failed to update password: ' + updateError.message);
+    }
+
+    logger.info('profile.password', 'changed', { userId });
+    return { success: true };
   },
 
   /**

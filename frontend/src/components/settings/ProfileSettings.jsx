@@ -1,10 +1,12 @@
 /**
  * ProfileSettings.jsx
  * Administrator profile, photo, email, password, 2FA, active sessions.
- * Uses real backend API: GET/PUT /api/profile, POST /api/profile/avatar.
+ * Uses real backend API: GET/PUT /api/profile, POST /api/profile/avatar,
+ * PUT /api/profile/password.
  *
- * Password change and session revocation are not yet wired to backend
- * endpoints, so they remain local-only (clearly noted in the UI).
+ * Session revocation has no backend endpoint yet, so it remains
+ * local-only (clearly noted in the UI). 2FA is org-enforced and shown
+ * read-only here.
  */
 import { useState, useEffect } from 'react';
 import { User, Mail, Lock, Shield, LogOut, Camera, Eye, EyeOff, AlertTriangle, Loader2 } from 'lucide-react';
@@ -42,14 +44,15 @@ export default function ProfileSettings() {
       try {
         setError(null);
         const res = await apiClient.get('/profile');
-        if (mounted && res.data) {
-          const d = res.data;
+        // Backend wraps every response as { success, data }.
+        const d = res.data?.data;
+        if (mounted && d) {
           const profile = {
             name: d.name || '',
             email: d.email || '',
-            jobTitle: d.jobTitle || d.staff_profile?.specialization || '',
-            phone: d.phoneNumber || d.phone || '',
-            photoUrl: d.photoUrl || d.avatarUrl || '',
+            jobTitle: d.staff_profile?.specialization || '',
+            phone: d.phone_number || '',
+            photoUrl: d.avatar_url || '',
             twoFactorEnabled: d.twoFactorEnabled ?? true,
             sessions: d.sessions || [],
           };
@@ -69,6 +72,9 @@ export default function ProfileSettings() {
     return () => { mounted = false; };
   }, []);
 
+  // Selecting a file previews it immediately, then uploads it right away —
+  // there's no separate "Upload" button in this UI, so the upload has to
+  // happen here rather than waiting to be triggered from elsewhere.
   const handlePhotoChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -76,28 +82,30 @@ export default function ProfileSettings() {
     const reader = new FileReader();
     reader.onload = (ev) => setPhotoPreview(ev.target.result);
     reader.readAsDataURL(file);
+    handleUploadAvatar(file);
   };
 
-  const handleUploadAvatar = async () => {
-    const fileInput = document.querySelector('input[type="file"][accept="image/*"]');
-    const file = fileInput?.files?.[0];
+  const handleUploadAvatar = async (file) => {
     if (!file) return;
 
     setUploadingAvatar(true);
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      // Field name must match the backend's multer config: upload.single('avatar')
+      formData.append('avatar', file);
       const res = await apiClient.post('/profile/avatar', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      if (res.data?.avatarUrl) {
-        setPhotoPreview(res.data.avatarUrl);
-        patch({ photoUrl: res.data.avatarUrl });
+      // Backend wraps every response as { success, data }.
+      const avatarUrl = res.data?.data?.avatarUrl;
+      if (avatarUrl) {
+        setPhotoPreview(avatarUrl);
+        patch({ photoUrl: avatarUrl });
         setLastSaved(`Avatar updated ${new Date().toLocaleTimeString()}`);
       }
     } catch (err) {
       console.error('Avatar upload failed:', err);
-      alert('Failed to upload avatar. Please try again.');
+      alert(err?.response?.data?.error || 'Failed to upload avatar. Please try again.');
     } finally {
       setUploadingAvatar(false);
     }
@@ -107,15 +115,18 @@ export default function ProfileSettings() {
     setSaving(true);
     setError(null);
     try {
+      // Note: no "Address" field is shown in this view, so it's deliberately
+      // left out of the payload — sending it would silently overwrite
+      // whatever address is already on file with an empty string.
       await apiClient.put('/profile', {
         name: p.name,
         phoneNumber: p.phone,
-        address: p.address || '',
+        specialization: p.jobTitle || undefined,
       });
       setLastSaved(`Saved ${new Date().toLocaleTimeString()}`);
     } catch (err) {
       console.error('Profile save failed:', err);
-      setError('Failed to save profile. Please try again.');
+      setError(err?.response?.data?.error || 'Failed to save profile. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -123,14 +134,26 @@ export default function ProfileSettings() {
 
   const handleSavePassword = async () => {
     setPwdError('');
-    if (passwordForm.new.length < 10) { setPwdError('Password must be at least 10 characters.'); return; }
+    if (!passwordForm.current) { setPwdError('Current password is required.'); return; }
+    if (passwordForm.new.length < 8) { setPwdError('New password must be at least 8 characters.'); return; }
+    if (!/[A-Z]/.test(passwordForm.new)) { setPwdError('New password must include an uppercase letter.'); return; }
+    if (!/[0-9]/.test(passwordForm.new)) { setPwdError('New password must include a number.'); return; }
+    if (!/[^A-Za-z0-9]/.test(passwordForm.new)) { setPwdError('New password must include a symbol (e.g. @, !, #).'); return; }
     if (passwordForm.new !== passwordForm.confirm) { setPwdError('Passwords do not match.'); return; }
     setPwdSaving(true);
-    // TODO: Wire to backend when /api/profile/password endpoint is available
-    await delay(400);
-    setPasswordForm({ current: '', new: '', confirm: '' });
-    setPwdSaving(false);
-    setLastSaved(`Password updated ${new Date().toLocaleTimeString()} (local only)`);
+    try {
+      await apiClient.put('/profile/password', {
+        currentPassword: passwordForm.current,
+        newPassword: passwordForm.new,
+      });
+      setPasswordForm({ current: '', new: '', confirm: '' });
+      setLastSaved(`Password updated ${new Date().toLocaleTimeString()}`);
+    } catch (err) {
+      console.error('Password change failed:', err);
+      setPwdError(err?.response?.data?.error || 'Failed to update password. Please try again.');
+    } finally {
+      setPwdSaving(false);
+    }
   };
 
   const revokeSession = (id) => setConfirmRevoke(id);
@@ -227,7 +250,7 @@ export default function ProfileSettings() {
                     {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                <p className="text-xs font-body text-slate-400">Min 10 chars, upper, number, symbol.</p>
+                <p className="text-xs font-body text-slate-400">Min 8 chars, uppercase, number, symbol.</p>
               </Field>
               <Field label="Confirm new" htmlFor="pconf">
                 <div className="relative">
@@ -240,7 +263,6 @@ export default function ProfileSettings() {
             </div>
             {pwdError && <p className="text-sm font-body text-red-500">{pwdError}</p>}
             <FormFooter onSave={handleSavePassword} saving={pwdSaving} saveLabel="Update Password" onCancel={() => setPasswordForm({ current: '', new: '', confirm: '' })} />
-            <Note tone="info">Password change is not yet wired to the backend API.</Note>
           </div>
 
           <div className="border-t border-slate-100 dark:border-white/10 pt-5">
@@ -250,7 +272,7 @@ export default function ProfileSettings() {
                 <p className="font-body text-slate-700 dark:text-slate-200">Authenticator App</p>
                 <p className="text-xs font-body text-slate-400">Use Google Authenticator, Authy, or similar.</p>
               </div>
-              <Toggle checked={p.twoFactorEnabled} onChange={v => patch({ twoFactorEnabled: v })} label="Enabled" />
+              <Toggle checked={p.twoFactorEnabled} onChange={v => patch({ twoFactorEnabled: v })} label="Enabled" disabled />
             </div>
             <Note tone="info">2FA is required for all administrators per clinic policy. (Read-only in this view; manage in your account security settings.)</Note>
           </div>

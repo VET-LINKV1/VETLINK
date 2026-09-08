@@ -31,7 +31,7 @@ const schemas = {
     email:          Joi.string().email().required().lowercase().trim(),
     password:       passwordSchema,
     phoneNumber:    phoneSchema,
-    role:           Joi.string().valid('admin', 'veterinarian', 'staff').required(),
+    role:           Joi.string().valid('veterinarian', 'staff').required(),
 
     // Veterinarian-specific (required if role = veterinarian)
     licenseNumber:  Joi.when('role', {

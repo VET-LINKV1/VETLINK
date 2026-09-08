@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react';
 import { Building, MapPin, Phone, Mail, Globe, Clock, AlertCircle, DollarSign, Upload, Image } from 'lucide-react';
 import { settingsService } from '../../services/settingsService';
-import { SettingCard, Field, TextInput, TextArea, Toggle, FormFooter, ChipList, Note, Select } from './primitives';
+import { SettingCard, Field, TextInput, TextArea, Toggle, FormFooter, ChipList, Note, Select, ErrorCard } from './primitives';
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 const TIMEZONES = ['Asia/Manila','Asia/Singapore','Asia/Tokyo','Asia/Dubai','Europe/London','America/New_York','America/Los_Angeles','UTC'];

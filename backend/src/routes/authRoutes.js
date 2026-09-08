@@ -17,7 +17,7 @@ router.post('/login', validateMiddleware(schemas.login), authController.login);
  * Unified registration — branches on role.
  */
 const unifiedRegisterSchema = Joi.object({
-  role: Joi.string().valid('client', 'admin', 'veterinarian', 'staff').required(),
+  role: Joi.string().valid('client', 'veterinarian', 'staff').required(),
 }).unknown(true);
 
 router.post('/register', validateMiddleware(unifiedRegisterSchema), (req, res, next) => {

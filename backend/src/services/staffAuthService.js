@@ -1,14 +1,13 @@
 /**
  * staffAuthService.js
- * Handles registration for Admin, Veterinarian, and Clinical Staff.
+ * Handles registration for Veterinarian and Clinical Staff accounts.
  *
- * Default flow:  Supabase Auth user is NOT created until OTP is verified.
- * SMS_DISABLED:  OTP step is skipped — account is created immediately
- *                and marked verified.
+ * OTP verification is disabled for this flow — the Supabase Auth user,
+ * profile row, and staff_profiles row are all created immediately on
+ * submission, and the account is marked verified right away.
  */
 const { supabaseAdmin } = require('../config/supabase');
 const otpService = require('./otpService');
-const smsService = require('./smsService');
 
 /**
  * Internal: actually create the Supabase Auth user + public.users row +
@@ -86,55 +85,18 @@ const staffAuthService = {
       .from('users').select('id').eq('phone_number', phoneNumber).single();
     if (existingPhone) throw new Error('This phone number is already registered.');
 
-    // ── SMS disabled → skip OTP, create user immediately ──
-    if (smsService.isDisabled()) {
-      const created = await provisionUser(formData);
-      return {
-        skippedOtp: true,
-        message:    'Account created successfully. You can now log in.',
-        email:      created.email,
-        role:       created.role,
-        phone:      phoneNumber,
-        devOTP:     null,
-        delivered:  false,
-        provider:   'disabled',
-      };
-    }
-
-    // ── Otherwise: normal OTP flow ────────────────────────
-    // Check pending registrations too
-    const { data: pendingEmail } = await supabaseAdmin
-      .from('pending_registrations').select('id').eq('email', email).single();
-    if (pendingEmail) throw new Error('A registration with this email is already pending OTP verification.');
-
-    // Clear old pending record for this phone
-    await supabaseAdmin.from('pending_registrations').delete().eq('phone_number', phoneNumber);
-
-    // Store pending registration
-    const { error } = await supabaseAdmin.from('pending_registrations').insert({
-      email:          formData.email,
-      full_name:      formData.fullName,
-      password_plain: formData.password,
-      role:           formData.role,
-      phone_number:   formData.phoneNumber,
-      license_number: formData.licenseNumber  || null,
-      specialization: formData.specialization || null,
-      position:       formData.position       || null,
-      expires_at:     new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-    });
-
-    if (error) throw new Error('Failed to store registration data: ' + error.message);
-
-    // Generate and send OTP
-    const otpResult = await otpService.createAndSendOTP(phoneNumber);
-
+    // ── OTP verification is disabled for staff/veterinarian registration ──
+    // The account is created immediately; no SMS/OTP step is required.
+    const created = await provisionUser(formData);
     return {
-      skippedOtp: false,
-      message:   'OTP sent to your phone number.',
-      phone:     phoneNumber,
-      devOTP:    otpResult.devOTP || null,
-      delivered: otpResult.delivered,
-      provider:  otpResult.provider,
+      skippedOtp: true,
+      message:    'Account created successfully. You can now log in.',
+      email:      created.email,
+      role:       created.role,
+      phone:      phoneNumber,
+      devOTP:     null,
+      delivered:  false,
+      provider:   'otp-disabled',
     };
   },
 
