@@ -45,6 +45,7 @@ import UserManagementPage    from './pages/admin/UserManagementPage';
 import AdminPetRecordsPage   from './pages/admin/AdminPetRecordsPage';
 import ServicesAdminPage     from './pages/admin/ServicesAdminPage';
 import SettingsPage          from './pages/admin/SettingsPage';
+import ConfinementPage       from './pages/ConfinementPage';
 import PaymentSuccessPage    from './pages/client/PaymentSuccessPage';
 import PaymentFailedPage     from './pages/client/PaymentFailedPage';
 import ProtectedRoute         from './components/ProtectedRoute';
@@ -231,6 +232,11 @@ function App() {
       } />
       <Route path="/discharge/:appointmentId" element={
         <Staff roles={['admin']}><VetDischargePage /></Staff>
+      } />
+
+      {/* Pet Confinement / Boarding & Hospitalization */}
+      <Route path="/confinement" element={
+        <Staff roles={['admin','veterinarian','staff']}><ConfinementPage /></Staff>
       } />
 
       {/* Direct Support & Communication Channels — VET + CLIENT only */}

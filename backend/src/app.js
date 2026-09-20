@@ -36,6 +36,7 @@ let noShowRoutes;   try { noShowRoutes   = require('./routes/noShowRoutes');   }
 let dashboardRoutes; try { dashboardRoutes = require('./routes/dashboardRoutes'); } catch (_) {}
 let adminPetRoutes; try { adminPetRoutes = require('./routes/adminPetRoutes'); } catch (_) {}
 let settingsRoutes; try { settingsRoutes = require('./routes/settingsRoutes'); } catch (_) {}
+let confinementRoutes; try { confinementRoutes = require('./routes/confinementRoutes'); } catch (_) {}
 
 const app = express();
 
@@ -153,6 +154,7 @@ if (noShowRoutes)        app.use('/api/no-show',          noShowRoutes);
 if (dashboardRoutes)     app.use('/api/dashboard',        dashboardRoutes);
 if (adminPetRoutes)      app.use('/api/admin/pets',       adminPetRoutes);
 if (settingsRoutes)      app.use('/api/admin/settings',   settingsRoutes);
+if (confinementRoutes)   app.use('/api/confinements',    confinementRoutes);
 
 app.use((req, res) => {
   logger.warn('404', req.method + ' ' + req.path + ' not found');

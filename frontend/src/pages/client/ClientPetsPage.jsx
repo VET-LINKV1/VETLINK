@@ -26,13 +26,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clientService } from '../../services/clientService';
+import { confinementService } from '../../services/confinementService';
 import VaccinationTimeline from '../../components/passport/VaccinationTimeline';
 import WeightChart from '../../components/passport/WeightChart';
 import {
   PawPrint, Plus, Edit2, X, Loader2, AlertCircle,
   FileText, Calendar, Stethoscope, Pill, Weight, Thermometer,
   HeartPulse, Shield, ShieldAlert, AlertTriangle, Syringe, FlaskConical,
-  Activity, Scissors, FolderOpen, Clock, ArrowRight, Ruler,
+  Activity, Scissors, FolderOpen, Clock, ArrowRight, Ruler, BedDouble, MapPin,
 } from 'lucide-react';
 
 const SPECIES_EMOJI = {
@@ -53,6 +54,7 @@ const SPECIES_TINT = {
 const SECTION_LABELS = {
   identity:    'Pet Profile / Identity',
   overview:    'Health Overview',
+  confinement: 'Confinement Status',
   vaccinations:'Vaccination Records',
   history:     'Medical History',
   medications: 'Medications & Prescriptions',
@@ -211,6 +213,86 @@ function StatusBadge({ status }) {
   };
   const cls = map[status] || 'bg-slate-100 text-slate-500 border-slate-200';
   return <span className={`text-xs font-body font-600 px-2 py-0.5 rounded-md border capitalize ${cls}`}>{status?.replace('_', ' ')}</span>;
+}
+
+function ConfinementStatusCard({ petId }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState('');
+  const [items, setItems]     = useState([]);
+
+  useEffect(() => {
+    if (!petId) return;
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    confinementService.listForPet(petId)
+      .then((rows) => { if (!cancelled) setItems(rows || []); })
+      .catch(() => { if (!cancelled) setError('Could not load confinement records right now.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [petId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-slate-400 text-sm font-body py-6 justify-center">
+        <Loader2 className="w-4 h-4 animate-spin" /> Loading confinement status\u2026
+      </div>
+    );
+  }
+  if (error) {
+    return <p className="text-sm font-body text-red-500 text-center py-4">{error}</p>;
+  }
+
+  const active = items.find((c) => c.status === 'active');
+  const history = items.filter((c) => c.status !== 'active').slice(0, 5);
+
+  return (
+    <div className="space-y-4">
+      {active ? (
+        <div className="bg-gradient-to-br from-teal-500 to-teal-700 text-white rounded-2xl p-4 shadow-lg shadow-teal-500/20">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-white/15 flex items-center justify-center shrink-0">
+              <BedDouble className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-display font-700">Currently confined at the clinic</p>
+              <p className="text-sm opacity-90 font-body mt-0.5">{active.reason}</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs font-body opacity-90">
+                <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Since {today(active.admitted_at)}</span>
+                {active.location && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {active.location}</span>}
+                {active.vet_name && <span className="flex items-center gap-1"><Stethoscope className="w-3.5 h-3.5" /> Dr. {active.vet_name}</span>}
+              </div>
+              {active.expected_discharge_at && (
+                <p className="text-xs font-body opacity-80 mt-1.5">Expected discharge: {today(active.expected_discharge_at)}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <EmptyHint icon={BedDouble} label="Not currently confined" hint="This pet is not staying at the clinic right now." />
+      )}
+
+      {history.length > 0 && (
+        <div>
+          <p className="text-xs font-body font-600 uppercase tracking-wider text-slate-400 mb-2">Past stays</p>
+          <div className="space-y-2">
+            {history.map((c) => (
+              <div key={c.id} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="font-body text-sm text-slate-700 truncate">{c.reason}</p>
+                  <p className="text-xs font-body text-slate-400 mt-0.5">
+                    {today(c.admitted_at)}{c.discharged_at ? ` \u2013 ${today(c.discharged_at)}` : ''}
+                    {c.location ? ` \u00b7 ${c.location}` : ''}
+                  </p>
+                </div>
+                <StatusBadge status={c.status} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ════════════════════════════ MAIN PAGE ════════════════════════════ */
@@ -444,6 +526,13 @@ function PetRecordView({ pet, record, onEdit, onOpenFile, onSharePassport }) {
             <OverviewStat icon={Weight} label="Current Wt" value={healthOverview.currentWeight ? `${healthOverview.currentWeight} kg` : '—'} tint="amber" />
             <OverviewStat icon={Ruler} label="Current BCS" value={healthOverview.currentBCS ? `${healthOverview.currentBCS}/9` : '—'} tint="cyan" />
           </div>
+        </SectionCard>
+      </section>
+
+      {/* CONFINEMENT STATUS — read-only, staff manage this from the Confinement module */}
+      <section id="sec-confinement">
+        <SectionCard icon={BedDouble} title={SECTION_LABELS.confinement} subtitle="Boarding, recovery, or hospitalization stays at the clinic">
+          <ConfinementStatusCard petId={pet.id} />
         </SectionCard>
       </section>
 
