@@ -216,10 +216,10 @@ function App() {
         </ProtectedRoute>
       } />
 
-      {/* Vet pre-visit review */}
-      <Route path="/vet/intake-review" element={
+      {/* Vet pre-visit review — disabled by clinic request (menu item + route hidden) */}
+      {/* <Route path="/vet/intake-review" element={
         <Staff roles={['veterinarian','admin','staff']}><VetIntakeReviewPage /></Staff>
-      } />
+      } /> */}
 
       {/* Post-care & Pharmacy */}
       <Route path="/client/postcare" element={
@@ -227,9 +227,10 @@ function App() {
           <ClientLayout><ClientPostCarePage /></ClientLayout>
         </ProtectedRoute>
       } />
-      <Route path="/pharmacy" element={
+      {/* Pharmacy — disabled by clinic request (menu item + route hidden) */}
+      {/* <Route path="/pharmacy" element={
         <Staff roles={['admin']}><ClinicPharmacyPage /></Staff>
-      } />
+      } /> */}
       <Route path="/discharge/:appointmentId" element={
         <Staff roles={['admin']}><VetDischargePage /></Staff>
       } />

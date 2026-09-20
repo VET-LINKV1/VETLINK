@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import {
   LayoutDashboard, Calendar, Users, PawPrint,
-  FileText, Settings, X, ChevronRight, LogOut, Activity, Zap, Sparkles, Wand2, Stethoscope, Shield, ClipboardList, Pill, MessageCircle, Video, Settings2, BedDouble,
+  FileText, Settings, X, ChevronRight, LogOut, Activity, Zap, Sparkles, Wand2, Stethoscope, Shield, MessageCircle, Video, Settings2, BedDouble,
 } from 'lucide-react';
 
 const NAV_ITEMS = {
@@ -12,9 +12,7 @@ const NAV_ITEMS = {
     { icon: PawPrint,        label: 'Pet Profiles',   to: '/pets' },
     { icon: FileText,        label: 'Medical Records',to: '/medical-records' },
     { icon: Stethoscope,     label: 'EMR',            to: '/emr' },
-    { icon: ClipboardList,   label: 'Pre-visit Review',to: '/vet/intake-review' },
     { icon: BedDouble,       label: 'Confinement',    to: '/confinement' },
-    { icon: Pill,            label: 'Pharmacy',       to: '/pharmacy' },
     { icon: Shield,          label: 'Health Passport',to: '/passport' },
     { icon: Settings2,       label: 'Services',       to: '/admin/services' },
     { icon: Activity,        label: 'Health Check',   to: '/health-check' },
@@ -31,7 +29,6 @@ const NAV_ITEMS = {
     { icon: PawPrint,        label: 'Pet Profiles',   to: '/pets' },
     { icon: FileText,        label: 'Medical Records',to: '/medical-records' },
     { icon: Stethoscope,     label: 'EMR',            to: '/emr' },
-    { icon: ClipboardList,   label: 'Pre-visit Review',to: '/vet/intake-review' },
     { icon: BedDouble,       label: 'Confinement',    to: '/confinement' },
     { icon: Shield,          label: 'Health Passport',to: '/passport' },
     { icon: Settings2,       label: 'Services',       to: '/admin/services' },
@@ -44,7 +41,6 @@ const NAV_ITEMS = {
     { icon: PawPrint,        label: 'Pet Profiles',   to: '/pets' },
     { icon: FileText,        label: 'Medical Records',to: '/medical-records' },
     { icon: Stethoscope,     label: 'EMR',            to: '/emr' },
-    { icon: ClipboardList,   label: 'Pre-visit Review',to: '/vet/intake-review' },
     { icon: BedDouble,       label: 'Confinement',    to: '/confinement' },
     { icon: Shield,          label: 'Health Passport',to: '/passport' },
     { icon: Settings2,       label: 'Services',       to: '/admin/services' },
