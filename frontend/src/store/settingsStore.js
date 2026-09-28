@@ -22,10 +22,10 @@ const seedClinic = {
   phone: '+63 2 8555 0199',
   mobile: '+63 917 555 0142',
   website: 'https://pawhealth.vet',
-  addressLine: 'Unit 4, Greenfield Tower',
-  city: 'Mandaluyong',
-  state: 'Metro Manila',
-  postalCode: '1550',
+  addressLine: 'National Highway',
+  city: 'Agoo',
+  state: 'La Union',
+  postalCode: '2503',
   country: 'Philippines',
   timezone: 'Asia/Manila',
   currency: 'PHP',
@@ -200,15 +200,13 @@ const seedNotifications = {
 
 const seedBranches = {
   branches: [
-    { id: 'b1', name: 'Mandaluyong Main', address: 'Unit 4, Greenfield Tower, Mandaluyong', phone: '+63 2 8555 0199', primary: true, hours: { open: '08:00', close: '18:00' } },
-    { id: 'b2', name: 'Makati Branch', address: '2F Glorietta 2, Makati', phone: '+63 2 8816 2200', primary: false, hours: { open: '09:00', close: '17:00' } },
+    { id: 'b1', name: 'Agoo Main', address: 'National Highway, Agoo, La Union', phone: '+63 72 555 0199', primary: true, hours: { open: '08:00', close: '18:00' } },
   ],
   rooms: [
     { id: 'r1', branch: 'b1', name: 'Consult Room 1', type: 'consultation', available: true },
     { id: 'r2', branch: 'b1', name: 'Consult Room 2', type: 'consultation', available: true },
     { id: 'r3', branch: 'b1', name: 'Surgery Suite A', type: 'surgery', available: false },
     { id: 'r4', branch: 'b1', name: 'Lab Room 1', type: 'laboratory', available: true },
-    { id: 'r5', branch: 'b2', name: 'Consult Room 1', type: 'consultation', available: true },
   ],
   roomTypes: ['consultation', 'surgery', 'laboratory'],
 };

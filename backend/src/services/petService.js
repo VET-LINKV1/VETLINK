@@ -45,7 +45,7 @@ const petService = {
    * Admin/staff/vet listing — clinic-wide, enriched for the table.
    * Supports server-side search + filters so the table stays fast.
    */
-  async listForAdmin({ q, species, breed, gender, vaccinationStatus, vetName, branch,
+  async listForAdmin({ q, species, breed, gender, vaccinationStatus, vetName,
                        registeredFrom, registeredTo, active, sort, dir, limit, offset } = {}) {
     let query = supabaseAdmin
       .from('pets')

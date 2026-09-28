@@ -5,7 +5,7 @@
  * Layout:
  *   Header:    title, description, "Register New Pet"
  *   Summary:   6 KPI cards (Total, Active, Dogs, Cats, Vax Due, Needs Attention)
- *   Toolbar:   search, filters (species/breed/sex/vax/vet/branch/registered/active),
+ *   Toolbar:   search, filters (species/breed/sex/vax/vet/registered/active),
  *              sort, column toggle, export, refresh, bulk actions
  *   Table:     paginated, sortable, selectable pet records + row actions
  *   Activity:  recent pet activity rail
@@ -55,7 +55,6 @@ export default function AdminPetRecordsPage() {
   const [gender, setGender]       = useState('');
   const [vax, setVax]             = useState('');
   const [vetName, setVetName]     = useState('');
-  const [branch, setBranch]       = useState('');
   const [regFrom, setRegFrom]     = useState('');
   const [regTo, setRegTo]         = useState('');
   const [active, setActive]       = useState('');
@@ -112,7 +111,7 @@ export default function AdminPetRecordsPage() {
         adminPetService.list({
           q: q || undefined, species: species || undefined, breed: breed || undefined,
           gender: gender || undefined, vaccinationStatus: vax || undefined,
-          vetName: vetName || undefined, branch: branch || undefined,
+          vetName: vetName || undefined,
           registeredFrom: regFrom || undefined, registeredTo: regTo || undefined,
           active: active === '' ? undefined : active,
           sort, dir, limit, offset: page * limit,
@@ -125,7 +124,7 @@ export default function AdminPetRecordsPage() {
     } catch (e) {
       setError(e?.response?.data?.error || 'Failed to load pet records.');
     } finally { setLoading(false); }
-  }, [q, species, breed, gender, vax, vetName, branch, regFrom, regTo, active, sort, dir, page]);
+  }, [q, species, breed, gender, vax, vetName, regFrom, regTo, active, sort, dir, page]);
 
   useEffect(() => {
     const t = setTimeout(reload, USE_MOCK ? 0 : 250);
@@ -274,15 +273,6 @@ export default function AdminPetRecordsPage() {
                   <input value={vetName} onChange={e => { setPage(0); setVetName(e.target.value); }} placeholder="Dr. name"
                     className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 px-2 py-1 text-xs font-body" />
                 </FilterField>
-                <FilterField label="Clinic Branch">
-                  <select value={branch} onChange={e => { setPage(0); setBranch(e.target.value); }}
-                    className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 px-2 py-1 text-xs font-body">
-                    <option value="">All branches</option>
-                    <option value="MNL">Mandaluyong (Main)</option>
-                    <option value="QC">Quezon City</option>
-                    <option value="MKT">Makati</option>
-                  </select>
-                </FilterField>
                 <FilterField label="Registered From">
                   <input type="date" value={regFrom} onChange={e => { setPage(0); setRegFrom(e.target.value); }}
                     className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 px-2 py-1 text-xs font-body" />
@@ -294,7 +284,7 @@ export default function AdminPetRecordsPage() {
                 <div className="col-span-2 flex items-end">
                   <button onClick={() => {
                     setSpecies(''); setBreed(''); setGender(''); setVax(''); setVetName('');
-                    setBranch(''); setRegFrom(''); setRegTo(''); setActive(''); setQ(''); setPage(0);
+                    setRegFrom(''); setRegTo(''); setActive(''); setQ(''); setPage(0);
                   }} className="text-xs font-body text-slate-500 hover:text-red-600 flex items-center gap-1">
                     <X className="w-3 h-3" /> Clear all filters
                   </button>

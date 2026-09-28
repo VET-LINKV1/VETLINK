@@ -16,9 +16,7 @@ const USE_MOCK = false; // set true to serve local synthetic data instead of liv
 
 /* ───────────────────────── Branches / clinic selector ─────────────────────── */
 export const BRANCHES = [
-  { id: 'main', name: 'PHVC — Mandaluyong (Main)', code: 'MNL' },
-  { id: 'qc', name: 'PHVC — Quezon City', code: 'QCY' },
-  { id: 'mkt', name: 'PHVC — Makati', code: 'MKT' },
+  { id: 'main', name: 'PHVC — Agoo, La Union', code: 'AGO' },
 ];
 
 /* ───────────────────────── Admin identity ─────────────────────────────────── */

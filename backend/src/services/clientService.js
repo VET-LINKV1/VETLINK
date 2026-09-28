@@ -196,8 +196,8 @@ const clientService = {
   _clinicInfo() {
     return {
       name:    'Pet Healthcare Veterinary Clinic',
-      address: '123 Animal Care Ave., Quezon City, Metro Manila',
-      phone:   '+63 (2) 8123-4567',
+      address: '123 Animal Care Ave., Agoo, La Union',
+      phone:   '+63 (72) 123-4567',
       email:   'care@pethealthclinic.ph',
       hours:   'Mon–Sat: 9:00 AM – 6:00 PM · Sun: Emergency only',
       website: 'www.pethealthclinic.ph',
