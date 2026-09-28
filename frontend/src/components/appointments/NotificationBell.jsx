@@ -3,6 +3,7 @@
  * Topbar notification panel — real API, mark read, unread badge.
  */
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck, X } from 'lucide-react';
 import { notificationService } from '../../services/appointmentService';
 
@@ -14,6 +15,7 @@ const TYPE_STYLES = {
 };
 
 export default function NotificationBell() {
+  const navigate = useNavigate();
   const [open, setOpen]           = useState(false);
   const [notifications, setNots]  = useState([]);
   const [unread, setUnread]       = useState(0);
@@ -48,6 +50,12 @@ export default function NotificationBell() {
     await notificationService.markRead(id);
     setNots(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
     setUnread(prev => Math.max(0, prev - 1));
+  };
+
+  const handleOpenNotification = async (n) => {
+    if (!n.is_read) await handleMarkRead(n.id);
+    setOpen(false);
+    if (n.link) navigate(n.link);
   };
 
   const handleMarkAll = async () => {
@@ -110,8 +118,8 @@ export default function NotificationBell() {
             ) : (
               notifications.map(n => (
                 <div key={n.id}
-                  className={`px-4 py-3 transition-colors cursor-default ${n.is_read ? 'bg-white' : TYPE_STYLES[n.type] || TYPE_STYLES.info}`}
-                  onClick={() => !n.is_read && handleMarkRead(n.id)}>
+                  className={`px-4 py-3 transition-colors ${n.link ? 'cursor-pointer hover:bg-slate-50' : 'cursor-default'} ${n.is_read ? 'bg-white' : TYPE_STYLES[n.type] || TYPE_STYLES.info}`}
+                  onClick={() => handleOpenNotification(n)}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-body font-600 ${n.is_read ? 'text-slate-600' : 'text-slate-800'}`}>

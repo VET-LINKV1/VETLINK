@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Menu } from 'lucide-react';
 import Sidebar from '../components/dashboard/Sidebar';
+import Topbar from '../components/dashboard/Topbar';
 
 function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -17,9 +18,12 @@ function DashboardLayout({ children }) {
           <Menu className="w-5 h-5" />
         </button>
       )}
-      <main className={`flex-1 overflow-y-auto scrollbar-thin px-6 py-6 lg:px-8 lg:py-8 transition-all duration-300 ${sidebarOpen ? 'lg:ml-60' : 'lg:ml-0'}`}>
-        {children}
-      </main>
+      <div className={`flex-1 flex flex-col min-w-0 overflow-hidden transition-all duration-300 ${sidebarOpen ? 'lg:ml-60' : 'lg:ml-0'}`}>
+        <Topbar onMenuClick={() => setSidebarOpen(true)} />
+        <main className="flex-1 overflow-y-auto scrollbar-thin px-6 py-6 lg:px-8 lg:py-8">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

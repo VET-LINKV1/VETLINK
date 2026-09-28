@@ -7,7 +7,6 @@ import { useState, useEffect } from 'react';
 import { Bell, ChevronDown, MapPin, User, ShieldCheck, Sparkles } from 'lucide-react';
 import { Card, SectionHeader, Skeleton } from './primitives';
 import { BRANCHES, ADMIN } from './mockData';
-import NotificationBell from '../../appointments/NotificationBell';
 import { useAuth } from '../../../hooks/useAuth';
 
 export default function WelcomeHeader() {
@@ -95,10 +94,7 @@ export default function WelcomeHeader() {
             <span className="font-body text-slate-600 dark:text-slate-300 text-xs font-500">System Online</span>
           </div>
 
-          {/* Notification bell (shared component) */}
-          <NotificationBell />
-
-          {/* User avatar handled by Topbar; we don't duplicate it here */}
+          {/* Notification bell now lives in the shared Topbar (visible on every page) */}
         </div>
       </div>
     </Card>

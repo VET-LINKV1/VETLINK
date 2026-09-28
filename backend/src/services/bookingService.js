@@ -263,21 +263,29 @@ const bookingService = {
 
     logger.info('booking', 'created', { id: appt.id, urgency: appt.urgency, reason: appt.reason_code });
 
-    // ── Emergency triage workflow ──
-    if (reason.code === 'emergency' && notificationService) {
-      try {
-        const { data: staff } = await supabaseAdmin
-          .from('users').select('id').in('role', ['admin', 'staff']).eq('is_active', true);
-        await Promise.all((staff || []).map(s =>
-          notificationService.create(s.id, {
-            title:   '🚨 EMERGENCY booking',
-            message: `Emergency appointment booked for ${pet.name} at ${new Date(appt.appointment_at).toLocaleString()}.`,
-            type:    'warning',
-            link:    `/appointments`,
-          }).catch(() => null)
-        ));
-      } catch (e) { logger.warn('booking', 'emergency notify failed', { msg: e.message }); }
+    // ── Front-desk visibility: let admin/staff know a booking came in ──
+    if (notificationService) {
+      if (reason.code === 'emergency') {
+        await notificationService.notifyRoles(['admin', 'staff'], {
+          title:   '🚨 EMERGENCY booking',
+          message: `Emergency appointment booked for ${pet.name} at ${new Date(appt.appointment_at).toLocaleString()}.`,
+          type:    'warning',
+          link:    '/appointments',
+        });
+      } else {
+        const when = new Date(appt.appointment_at).toLocaleString('en-US', {
+          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+        });
+        await notificationService.notifyRoles(['admin', 'staff'], {
+          title:   'New appointment request',
+          message: `${pet.name} — ${reason.label} requested for ${when}. Awaiting confirmation.`,
+          type:    'info',
+          link:    '/appointments',
+        });
+      }
+    }
 
+    if (reason.code === 'emergency') {
       // Also draft a medical record + (placeholder) SOAP note flagged URGENT.
       // Only do this if we have an assigned vet — otherwise it'd violate the
       // medical_records.vet_id NOT NULL constraint.

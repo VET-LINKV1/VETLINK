@@ -427,6 +427,14 @@ const appointmentService = {
           link:    '/dashboard',
         });
       }
+      if (actorRole !== 'admin') {
+        await notificationService.notifyRoles(['admin'], {
+          title:   'Appointment Cancelled',
+          message: `Appointment for ${petName} on ${dateStr} was cancelled — the slot is free again.`,
+          type:    'warning',
+          link:    '/appointments',
+        });
+      }
     }
     if (newStatus === 'completed' && updated.client?.id) {
       await notificationService.create(updated.client.id, {
@@ -452,6 +460,14 @@ const appointmentService = {
           message: `${petName} did not show for their appointment on ${dateStr}.`,
           type:    'info',
           link:    '/dashboard',
+        });
+      }
+      if (actorRole !== 'admin') {
+        await notificationService.notifyRoles(['admin'], {
+          title:   'Patient No-Show',
+          message: `${petName} did not show for their appointment on ${dateStr}.`,
+          type:    'info',
+          link:    '/appointments',
         });
       }
     }

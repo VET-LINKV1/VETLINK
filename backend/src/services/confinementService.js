@@ -130,6 +130,14 @@ const confinementService = {
           link:    '/client/pets',
         });
       } catch (_) {}
+      if (role !== 'admin') {
+        await notificationService.notifyRoles(['admin'], {
+          title:   `${pet.name} admitted for confinement`,
+          message: reason,
+          type:    'info',
+          link:    '/confinement',
+        });
+      }
     }
 
     return getConfinementRow(inserted.id);
@@ -171,15 +179,25 @@ const confinementService = {
     if (error) throw new Error(error.message);
 
     if (notificationService) {
+      let petName = 'Pet';
       try {
         const { data: pet } = await supabaseAdmin.from('pets').select('name').eq('id', current.pet_id).single();
+        petName = pet?.name || 'Your pet';
         await notificationService.create(current.client_id, {
-          title:   `${pet?.name || 'Your pet'} has been discharged`,
+          title:   `${petName} has been discharged`,
           message: dischargeNotes || 'Ready to go home.',
           type:    'success',
           link:    '/client/pets',
         });
       } catch (_) {}
+      if (role !== 'admin') {
+        await notificationService.notifyRoles(['admin'], {
+          title:   `${petName} discharged`,
+          message: dischargeNotes || 'Ready to go home.',
+          type:    'success',
+          link:    '/confinement',
+        });
+      }
     }
 
     return getConfinementRow(id);

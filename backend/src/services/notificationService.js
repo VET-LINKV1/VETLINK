@@ -67,6 +67,25 @@ const notificationService = {
     if (error) throw new Error(error.message);
     return true;
   },
+
+  /**
+   * Notify every active user in one or more roles (e.g. front desk /
+   * admin broadcasts — emergency bookings, cancellations, new
+   * confinements). Best-effort: a failure for one user, or for the
+   * whole lookup, is logged and swallowed so it never blocks the
+   * action that triggered it.
+   */
+  async notifyRoles(roles, { title, message, type = 'info', link } = {}) {
+    try {
+      const { data: users } = await supabaseAdmin
+        .from('users').select('id').in('role', roles).eq('is_active', true);
+      await Promise.all((users || []).map(u =>
+        notificationService.create(u.id, { title, message, type, link }).catch(() => null)
+      ));
+    } catch (e) {
+      logger.warn('notification', 'notifyRoles failed', { msg: e.message, roles });
+    }
+  },
 };
 
 module.exports = notificationService;
