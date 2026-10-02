@@ -1,10 +1,31 @@
 /**
  * notificationService.js
- * Create + read in-app notifications. Optionally fires SMS too.
+ * Create + read in-app notifications. Optionally fires SMS and/or email too.
  */
 const { supabaseAdmin } = require('../config/supabase');
 const smsService = require('./smsService');
+const emailService = require('./emailService');
 const logger = require('../utils/logger');
+
+function escapeHtml(s = '') {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+/** Simple branded wrapper so every notification email looks consistent. */
+function emailTemplate(title, message, link) {
+  const appBaseUrl = process.env.FRONTEND_URL || '';
+  const url = link ? (link.startsWith('http') ? link : `${appBaseUrl}${link}`) : null;
+  return `
+    <div style="font-family:sans-serif;">
+      <h2 style="color:#1e293b;margin:0 0 8px;">${escapeHtml(title)}</h2>
+      <p style="color:#475569;line-height:1.5;">${escapeHtml(message)}</p>
+      ${url ? `<p><a href="${url}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;">Open VETLINK</a></p>` : ''}
+      <p style="color:#94a3b8;font-size:12px;margin-top:16px;">This is an automated message from VETLINK — Agoo, La Union.</p>
+    </div>
+  `;
+}
 
 const notificationService = {
   /** In-app only. */
@@ -17,23 +38,34 @@ const notificationService = {
   },
 
   /**
-   * In-app + SMS. The SMS body defaults to "{title}: {message}" but can
-   * be overridden with `smsBody`. Respects user's sms_opt_in preference.
+   * In-app + SMS + email. The SMS body defaults to "{title}: {message}"
+   * but can be overridden with `smsBody` (SMS respects the user's
+   * sms_opt_in preference). Email is sent whenever SMTP is configured
+   * (see emailService) and the user has an email on file — subject/body
+   * default to `title`/`message` but can be overridden with
+   * `emailSubject`/`emailHtml`.
    */
-  async createWithSMS(userId, { title, message, type = 'info', link, smsBody }) {
+  async createWithSMS(userId, { title, message, type = 'info', link, smsBody, emailSubject, emailHtml }) {
     if (!userId) return;
     // Insert in-app notification first
     await notificationService.create(userId, { title, message, type, link });
     // Then check opt-in and send SMS
     try {
       const { data: user } = await supabaseAdmin
-        .from('users').select('phone_number, sms_opt_in').eq('id', userId).single();
+        .from('users').select('email, phone_number, sms_opt_in').eq('id', userId).single();
       if (user?.phone_number && user.sms_opt_in !== false) {
         const body = smsBody || `${title}: ${message}`;
         await smsService.sendNotification(user.phone_number, body);
       }
+      if (user?.email && emailService.isConfigured()) {
+        await emailService.send({
+          to:      user.email,
+          subject: emailSubject || title,
+          html:    emailHtml || emailTemplate(title, message, link),
+        });
+      }
     } catch (e) {
-      logger.warn('notification', 'SMS lookup failed', { msg: e.message, userId });
+      logger.warn('notification', 'SMS/email dispatch failed', { msg: e.message, userId });
     }
   },
 

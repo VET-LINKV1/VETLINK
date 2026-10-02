@@ -285,6 +285,31 @@ const bookingService = {
       }
     }
 
+    // ── Let the pet owner know their booking went through (in-app, SMS if
+    //    opted in, and email if the clinic has SMTP configured) ──
+    if (notificationService) {
+      const whenForClient = new Date(appt.appointment_at).toLocaleString('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      });
+      if (reason.code === 'emergency') {
+        await notificationService.createWithSMS(finalClientId, {
+          title:   'Emergency Appointment Confirmed',
+          message: `Your emergency appointment for ${pet.name} on ${whenForClient} has been confirmed. The clinic has been alerted.`,
+          type:    'warning',
+          link:    '/client/appointments',
+          smsBody: `PHVC: Your emergency appointment for ${pet.name} on ${whenForClient} is CONFIRMED. The clinic has been alerted.`,
+        });
+      } else {
+        await notificationService.createWithSMS(finalClientId, {
+          title:   'Appointment Request Received',
+          message: `We received your ${reason.label} request for ${pet.name} on ${whenForClient}. We'll confirm shortly.`,
+          type:    'success',
+          link:    '/client/appointments',
+          smsBody: `PHVC: Booking received for ${pet.name} on ${whenForClient} with reason "${reason.label}". We'll confirm shortly.`,
+        });
+      }
+    }
+
     if (reason.code === 'emergency') {
       // Also draft a medical record + (placeholder) SOAP note flagged URGENT.
       // Only do this if we have an assigned vet — otherwise it'd violate the
