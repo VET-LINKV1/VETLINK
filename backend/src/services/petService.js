@@ -52,7 +52,21 @@ const petService = {
       .select('*, owner:users!pets_owner_id_fkey(id, name, email, phone_number)')
       .order(sort || 'created_at', { ascending: (dir || 'desc') === 'asc' });
 
-    if (q) query = query.or(`name.ilike.%${q}%,breed.ilike.%${q}%,owner.name.ilike.%${q}%`);
+    if (q) {
+      const term = `%${q}%`;
+      // Pets don't have the owner's name as a real column, and filtering an
+      // *embedded* resource's column inside .or() isn't reliably supported by
+      // PostgREST without an !inner join hint (it can fail outright or just
+      // never match) — so a search for the owner's name silently never found
+      // anything. Look the matching owners up first, then OR in their ids,
+      // which are a real column (owner_id) PostgREST can filter on directly.
+      const { data: matchingOwners } = await supabaseAdmin
+        .from('users').select('id').eq('role', 'client').ilike('name', term);
+      const ownerIds = (matchingOwners || []).map((o) => o.id);
+      const orParts = [`name.ilike.${term}`, `breed.ilike.${term}`];
+      if (ownerIds.length) orParts.push(`owner_id.in.(${ownerIds.join(',')})`);
+      query = query.or(orParts.join(','));
+    }
     if (species) query = query.eq('species', species);
     if (breed) query = query.eq('breed', breed);
     if (gender) query = query.eq('gender', gender);
