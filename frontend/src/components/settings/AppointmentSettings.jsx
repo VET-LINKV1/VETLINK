@@ -96,7 +96,7 @@ export default function AppointmentSettings() {
           <ChipList items={a.customDurations.map(String)} onAdd={(v) => set({ customDurations: [...a.customDurations, Number(v)] })} onRemove={(v) => set({ customDurations: a.customDurations.filter(x => String(x) !== v) })} placeholder="e.g. 75" />
         </Field>
         <Field label="Appointment types" htmlFor="atypes">
-          <ChipList items={a.types} onAdd={(v) => set({ types: [...a.types, v] })} onRemove={(v) => set({ types: a.types.filter(x => x !== v) })} placeholder="Add appointment type" />
+          <ChipList items={a.appointmentTypes} onAdd={(v) => set({ appointmentTypes: [...a.appointmentTypes, v] })} onRemove={(v) => set({ appointmentTypes: a.appointmentTypes.filter(x => x !== v) })} placeholder="Add appointment type" />
         </Field>
         <div className="flex items-center justify-between pt-2">
           <div>
@@ -153,7 +153,7 @@ export default function AppointmentSettings() {
           <TextInput id="ablead" type="number" min="1" value={a.bookingLeadDays} onChange={e => set({ bookingLeadDays: Number(e.target.value) })} />
         </Field>
         <Field label="Veterinarian scheduling mode" htmlFor="avet">
-          <Select id="avet" value={a.vetScheduling} onChange={e => set({ vetScheduling: e.target.value })}>
+          <Select id="avet" value={a.vetSchedulingMode} onChange={e => set({ vetSchedulingMode: e.target.value })}>
             {VET_SCHED.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
           </Select>
         </Field>
