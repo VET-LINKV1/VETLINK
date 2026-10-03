@@ -151,6 +151,12 @@ if (notificationRoutes)  app.use('/api/notifications',   notificationRoutes);
 if (profileRoutes)       app.use('/api/profile',         profileRoutes);
 if (vetScheduleRoutes)   app.use('/api/vet-schedule',    vetScheduleRoutes);
 if (userMgmtRoutes)      app.use('/api/admin/users',     userMgmtRoutes);
+// Mount the more specific /api/admin/* routers BEFORE the catch-all admin
+// router: adminRoutes applies roleMiddleware('admin') to everything under
+// /api/admin, which was blocking vets/staff from /api/admin/pets (pet search
+// in Confinement "Admit a pet", Pet Records, etc.).
+if (adminPetRoutes)      app.use('/api/admin/pets',       adminPetRoutes);
+if (settingsRoutes)      app.use('/api/admin/settings',   settingsRoutes);
 if (adminRoutes)         app.use('/api/admin',           adminRoutes);
 if (paymentRoutes)       app.use('/api/payments',        paymentRoutes);
 if (analyticsRoutes)     app.use('/api/analytics',       analyticsRoutes);
@@ -165,8 +171,6 @@ if (commsRoutes)         app.use('/api/comms',           commsRoutes);
 if (reminderRoutes)      app.use('/api/reminders',       reminderRoutes);
 if (noShowRoutes)        app.use('/api/no-show',          noShowRoutes);
 if (dashboardRoutes)     app.use('/api/dashboard',        dashboardRoutes);
-if (adminPetRoutes)      app.use('/api/admin/pets',       adminPetRoutes);
-if (settingsRoutes)      app.use('/api/admin/settings',   settingsRoutes);
 if (confinementRoutes)   app.use('/api/confinements',    confinementRoutes);
 
 app.use((req, res) => {
