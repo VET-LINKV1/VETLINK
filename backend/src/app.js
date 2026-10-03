@@ -125,6 +125,19 @@ app.get('/health', (_, res) => res.json({
   timestamp: new Date().toISOString(),
 }));
 
+// Reachable at /api/_version (unlike /health, which the SPA rewrite
+// swallows on the deployed site). Vercel sets VERCEL_GIT_COMMIT_SHA
+// automatically on every deploy — compare it to `git log -1` locally
+// to confirm the live site is actually running the latest push.
+app.get('/api/_version', (_, res) => res.json({
+  success: true,
+  commit:      process.env.VERCEL_GIT_COMMIT_SHA || null,
+  commitShort: (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7) || null,
+  branch:      process.env.VERCEL_GIT_COMMIT_REF || null,
+  env:         process.env.VERCEL_ENV || null,
+  checkedAt:   new Date().toISOString(),
+}));
+
 app.use('/api/auth',                authRoutes);
 app.use('/api/staff',               staffAuthRoutes);
 app.use('/api/client',              clientRoutes);
