@@ -40,6 +40,7 @@ router.get('/audit/list',        ctl.listAudit);
 
 /* ── Connection tests ────────────────────────────────────────────────────── */
 router.post('/test/sms',         ctl.testSms);
+router.post('/test/email',       ctl.testEmail);
 router.get('/billing/paymongo',  ctl.paymongoStatus);
 
 module.exports = router;

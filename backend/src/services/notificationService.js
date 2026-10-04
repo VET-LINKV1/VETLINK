@@ -57,7 +57,7 @@ const notificationService = {
         const body = smsBody || `${title}: ${message}`;
         await smsService.sendNotification(user.phone_number, body);
       }
-      if (user?.email && emailService.isConfigured()) {
+      if (user?.email && emailService.isConfigured() && await emailService.isEnabled()) {
         await emailService.send({
           to:      user.email,
           subject: emailSubject || title,

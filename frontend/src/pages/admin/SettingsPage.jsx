@@ -5,7 +5,7 @@
  * Responsive (collapses to accordion on mobile), accessible (ARIA roles,
  * keyboard nav), visually consistent with the VETLINK Admin Portal.
  */
-import { useState } from 'react';
+import { Component, useState } from 'react';
 import {
   Building2, User, ShieldCheck, Calendar, PawPrint, Pill, Microscope,
   DollarSign, Bell, DoorOpen, ShieldAlert, SlidersHorizontal, ScrollText,
@@ -24,6 +24,26 @@ import BranchSettings from '../../components/settings/BranchSettings';
 import SecuritySettings from '../../components/settings/SecuritySettings';
 import SystemSettings from '../../components/settings/SystemSettings';
 import AuditLogs from '../../components/settings/AuditLogs';
+import { ErrorCard } from '../../components/settings/primitives';
+
+// Keeps a crash inside one settings section from blanking the whole app.
+// Keyed by section in the render below, so switching sections resets it.
+class SectionErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error('Settings section crashed:', error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <ErrorCard
+          message={'This section hit an error: ' + (this.state.error.message || 'unknown error')}
+          onRetry={() => this.setState({ error: null })}
+        />
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const SECTIONS = [
   { key: 'clinic',        label: 'Clinic Settings',        icon: Building2,      component: ClinicSettings,     group: 'General' },
@@ -128,7 +148,9 @@ export default function SettingsPage() {
             <activeSection.icon className="w-5 h-5 text-blue-600" />
             <h2 className="font-display font-700 text-lg text-slate-800 dark:text-white">{activeSection.label}</h2>
           </div>
-          <ActiveComponent />
+          <SectionErrorBoundary key={active}>
+            <ActiveComponent />
+          </SectionErrorBoundary>
         </main>
 
       </div>

@@ -208,7 +208,7 @@ export function Note({ children, tone = 'info' }) {
 }
 
 /* --------------------- Generic list-editor (add/remove) ------------------ */
-export function ChipList({ items, onAdd, onRemove, placeholder, addLabel = 'Add', suggestions }) {
+export function ChipList({ items = [], onAdd, onRemove, placeholder, addLabel = 'Add', suggestions }) {
   const [value, setValue] = useState('');
   const add = () => {
     const v = value.trim();

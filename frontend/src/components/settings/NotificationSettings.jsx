@@ -1,10 +1,10 @@
 /**
  * NotificationSettings.jsx
- * ClickSend SMS, email, appointment/vaccination/refill/lab/payment
- * notifications, templates, plus a "Send Test SMS" action.
+ * Email (SMTP) sender + master switch, appointment/vaccination/refill/lab/
+ * payment notifications, templates, plus a "Send Test Email" action.
  */
 import { useState, useEffect } from 'react';
-import { Bell, MessageSquare, Mail, CalendarCheck, Syringe, Pill, FlaskConical, CreditCard, Send, Wifi, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Bell, Mail, AtSign, CalendarCheck, Syringe, Pill, FlaskConical, CreditCard, Send, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { settingsService } from '../../services/settingsService';
 import { SettingCard, Field, TextInput, Toggle, FormFooter, Note, StatusPill, ErrorCard } from './primitives';
 
@@ -32,8 +32,7 @@ export default function NotificationSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState('');
-  const [testSms, setTestSms] = useState({ open: false, phone: '', sending: false, result: null });
-  const [testSmsDuration, setTestSmsDuration] = useState(0);
+  const [testEmail, setTestEmail] = useState({ open: false, to: '', sending: false, result: null });
   const [error, setError] = useState(null);
 
   // Fetch on mount
@@ -52,7 +51,7 @@ export default function NotificationSettings() {
   if (loading) {
     return (
       <div className="space-y-5" aria-busy="true">
-        <SettingCard title="SMS (ClickSend)" subtitle="Outbound SMS provider configuration." icon={MessageSquare}>
+        <SettingCard title="Email" subtitle="Outbound email (SMTP) configuration." icon={Mail}>
           <div className="space-y-3 animate-pulse">
             <div className="h-12 rounded-lg bg-slate-100 dark:bg-white/5" />
             <div className="grid gap-4 md:grid-cols-3">
@@ -82,6 +81,9 @@ export default function NotificationSettings() {
   }
 
   const n = data;
+  // Older backends / DBs without phase24 may not send `email` yet.
+  const em = n.email || { enabled: true, fromName: '', fromAddress: n.emailFrom || '', configured: false, host: '' };
+  const setEmail = (patch) => set({ email: { ...em, ...patch } });
 
   const set = async (patch) => {
     await settingsService.updateSection('notifications', { ...n, ...patch });
@@ -103,54 +105,59 @@ export default function NotificationSettings() {
     setData(d);
   };
 
-  const openSendTest = () => setTestSms({ open: true, phone: data?.clinic?.mobile || '', sending: false, result: null });
+  const openSendTest = () => setTestEmail({ open: true, to: em.fromAddress || '', sending: false, result: null });
   const sendTest = async () => {
-    if (!/^\+?\d{7,}$/.test(testSms.phone.replace(/\s/g, ''))) { alert('Enter a valid phone number with country code.'); return; }
-    setTestSms(s => ({ ...s, sending: true, result: null }));
-    const res = await settingsService.testSms(testSms.phone, 'This is a test message from Paw Health Veterinary Clinic.');
-    setTestSms(s => ({ ...s, sending: false, result: res }));
-    setTestSmsDuration(d => d + 1);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmail.to.trim())) {
+      setTestEmail(t => ({ ...t, result: { ok: false, message: 'Enter a valid email address.' } }));
+      return;
+    }
+    setTestEmail(t => ({ ...t, sending: true, result: null }));
+    try {
+      const res = await settingsService.testEmail(testEmail.to.trim());
+      setTestEmail(t => ({ ...t, sending: false, result: res }));
+    } catch (e) {
+      setTestEmail(t => ({ ...t, sending: false, result: { ok: false, message: e?.response?.data?.error || 'Failed to send test email.' } }));
+    }
   };
 
   return (
     <div className="space-y-5">
-      <SettingCard title="SMS (ClickSend)" subtitle="Outbound SMS provider configuration." icon={MessageSquare}>
+      <SettingCard title="Email" subtitle="Outbound email (SMTP) configuration." icon={Mail}>
         <div className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-white/5">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-              <Wifi className="w-4 h-4" />
+              <AtSign className="w-4 h-4" />
             </div>
             <div>
-              <p className="font-body text-sm font-600 text-slate-700 dark:text-slate-200">ClickSend</p>
-              <p className="text-xs font-body text-slate-400">Sender ID: {n.clicksend.senderId}</p>
+              <p className="font-body text-sm font-600 text-slate-700 dark:text-slate-200">SMTP</p>
+              <p className="text-xs font-body text-slate-400">
+                {em.configured ? `Server: ${em.host || 'configured'}` : 'Not set up — add SMTP_HOST, SMTP_USER and SMTP_PASS to the server environment.'}
+              </p>
             </div>
           </div>
-          <StatusPill tone={n.clicksend.connected ? 'success' : 'danger'}>
-            {n.clicksend.connected ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
-            {n.clicksend.connected ? 'Connected' : 'Offline'}
+          <StatusPill tone={em.configured ? 'success' : 'danger'}>
+            {em.configured ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+            {em.configured ? 'Connected' : 'Not configured'}
           </StatusPill>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          <Field label="From name" htmlFor="nfrom">
-            <TextInput id="nfrom" value={n.clicksend.from} onChange={e => set({ clicksend: { ...n.clicksend, from: e.target.value } })} />
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="From name" htmlFor="nfrom" hint="Shown as the sender in the client's inbox.">
+            <TextInput id="nfrom" value={em.fromName} onChange={e => setEmail({ fromName: e.target.value })} placeholder="VetLink" />
           </Field>
-          <Field label="Sender ID" htmlFor="nsid">
-            <TextInput id="nsid" value={n.clicksend.senderId} onChange={e => set({ clicksend: { ...n.clicksend, senderId: e.target.value } })} />
-          </Field>
-          <Field label="Email from" htmlFor="nemail">
-            <TextInput id="nemail" type="email" value={n.emailFrom} onChange={e => set({ emailFrom: e.target.value })} />
+          <Field label="From email address" htmlFor="nemail" hint="Gmail SMTP always sends from the signed-in account.">
+            <TextInput id="nemail" type="email" value={em.fromAddress} onChange={e => setEmail({ fromAddress: e.target.value })} placeholder="clinic@example.com" />
           </Field>
         </div>
         <div className="flex items-center justify-between pt-2">
           <div>
-            <p className="font-body text-slate-700 dark:text-slate-200">Enable SMS notifications</p>
-            <p className="text-xs font-body text-slate-400">Master switch for all SMS channels.</p>
+            <p className="font-body text-slate-700 dark:text-slate-200">Enable email notifications</p>
+            <p className="text-xs font-body text-slate-400">Master switch for all notification emails to clients.</p>
           </div>
-          <Toggle checked={n.clicksend.enabled} onChange={v => set({ clicksend: { ...n.clicksend, enabled: v } })} label="SMS enabled" />
+          <Toggle checked={em.enabled} onChange={v => setEmail({ enabled: v })} label="Email enabled" />
         </div>
         <div className="flex justify-end pt-2">
           <button onClick={openSendTest} className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-body font-600 flex items-center gap-1.5 shadow shadow-blue-500/20">
-            <Send className="w-4 h-4" /> Send Test SMS
+            <Send className="w-4 h-4" /> Send Test Email
           </button>
         </div>
       </SettingCard>
@@ -199,26 +206,26 @@ export default function NotificationSettings() {
         <FormFooter onSave={handleSave} onReset={handleReset} saving={saving} lastSaved={lastSaved} />
       </div>
 
-      {testSms.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setTestSms(s => ({ ...s, open: false }))}>
+      {testEmail.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setTestEmail(t => ({ ...t, open: false }))}>
           <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="p-6 space-y-4">
-              <h3 className="font-display text-slate-800 dark:text-white text-base font-700">Send Test SMS</h3>
-              <Field label="Test phone number" htmlFor="tsms">
-                <TextInput id="tsms" value={testSms.phone} onChange={e => setTestSms(s => ({ ...s, phone: e.target.value }))} placeholder="+63 917 555 0000" />
+              <h3 className="font-display text-slate-800 dark:text-white text-base font-700">Send Test Email</h3>
+              <Field label="Send to" htmlFor="temail">
+                <TextInput id="temail" type="email" value={testEmail.to} onChange={e => setTestEmail(t => ({ ...t, to: e.target.value }))} placeholder="you@example.com" />
               </Field>
-              <p className="text-xs font-body text-slate-400">Message: "This is a test message from Paw Health Veterinary Clinic."</p>
-              {testSms.result && (
-                <StatusPill tone={testSms.result.ok ? 'success' : 'danger'}>
-                  {testSms.result.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
-                  {testSms.result.message}
+              <p className="text-xs font-body text-slate-400">Subject: "VETLINK test email"</p>
+              {testEmail.result && (
+                <StatusPill tone={testEmail.result.ok ? 'success' : 'danger'}>
+                  {testEmail.result.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                  {testEmail.result.message}
                 </StatusPill>
               )}
             </div>
             <div className="flex gap-3 px-6 py-4 border-t border-slate-100 dark:border-white/10 justify-end">
-              <button onClick={() => setTestSms(s => ({ ...s, open: false }))} className="px-3.5 py-2 rounded-lg border dark:border-white/10 text-slate-700 dark:text-slate-200 text-sm font-body font-600">Cancel</button>
-              <button onClick={sendTest} disabled={testSms.sending} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-body font-600 flex items-center gap-1.5">
-                {testSms.sending && <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+              <button onClick={() => setTestEmail(t => ({ ...t, open: false }))} className="px-3.5 py-2 rounded-lg border dark:border-white/10 text-slate-700 dark:text-slate-200 text-sm font-body font-600">Close</button>
+              <button onClick={sendTest} disabled={testEmail.sending} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-body font-600 flex items-center gap-1.5 disabled:opacity-60">
+                {testEmail.sending && <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
                 Send
               </button>
             </div>

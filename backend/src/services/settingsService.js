@@ -17,6 +17,7 @@
  */
 const { supabaseAdmin } = require('../config/supabase');
 const smsService = require('./smsService');
+const emailService = require('./emailService');
 
 const DEFAULT_ID = 'default';
 const CONFIG_TABLES = {
@@ -68,12 +69,22 @@ async function getConfigRow(table) {
 }
 
 async function updateConfigRow(table, patch, actorId, moduleKey, summary, before) {
-  const { data, error } = await supabaseAdmin
-    .from(table)
-    .update(patch)
-    .eq('id', DEFAULT_ID)
-    .select('*')
-    .maybeSingle();
+  let body = { ...patch };
+  let data, error;
+  // If a newer migration hasn't been applied yet, PostgREST rejects unknown
+  // columns ("Could not find the 'x' column"). Drop those and retry so the
+  // rest of the section still saves.
+  for (let i = 0; i < 5; i++) {
+    ({ data, error } = await supabaseAdmin
+      .from(table)
+      .update(body)
+      .eq('id', DEFAULT_ID)
+      .select('*')
+      .maybeSingle());
+    const missing = error && /could not find the '([^']+)' column/i.exec(error.message || '');
+    if (!missing || !(missing[1] in body)) break;
+    delete body[missing[1]];
+  }
   if (error) throw new Error('Failed to update ' + table + ': ' + error.message);
   await logSettingsChange(actorId, moduleKey, summary, { before, after: data });
   return data;
@@ -215,6 +226,14 @@ const notificationsMap = {
     channels: r.channels || {},
     reminderLeadHours: r.reminder_lead_hours || [],
     emailFrom: r.email_from || '',
+    email: {
+      enabled:     r.email_enabled !== false,          // column added in phase24; default on
+      fromName:    r.email_from_name ?? r.clicksend_from ?? '',
+      fromAddress: r.email_from || '',
+      // Server-side SMTP status (credentials live in env vars, never in the DB)
+      configured:  emailService.isConfigured(),
+      host:        process.env.SMTP_HOST || '',
+    },
     templates: r.templates || {},
   }),
   from: p => {
@@ -229,6 +248,12 @@ const notificationsMap = {
     if (p.channels !== undefined) out.channels = p.channels;
     if (p.reminderLeadHours !== undefined) out.reminder_lead_hours = p.reminderLeadHours;
     if (p.emailFrom !== undefined) out.email_from = p.emailFrom || null;
+    if (p.email) {
+      const em = p.email;
+      if (em.enabled !== undefined)     out.email_enabled = !!em.enabled;
+      if (em.fromName !== undefined)    out.email_from_name = em.fromName || null;
+      if (em.fromAddress !== undefined) out.email_from = em.fromAddress || null;
+    }
     if (p.templates !== undefined) out.templates = p.templates;
     return out;
   },
@@ -473,6 +498,22 @@ async function testSms(phoneNumber, message = 'This is a test message from VETLI
   return { ok: result.delivered, provider: result.provider, disabled: result.disabled || false };
 }
 
+async function testEmail(to) {
+  const addr = String(to || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) return { ok: false, message: 'Enter a valid email address.' };
+  if (!emailService.isConfigured()) {
+    return { ok: false, message: 'Email is not set up on the server (SMTP_HOST / SMTP_USER / SMTP_PASS missing).' };
+  }
+  const res = await emailService.send({
+    to: addr,
+    subject: 'VETLINK test email',
+    html: '<p>This is a test message from Paw Health Veterinary Clinic.</p><p style="color:#94a3b8;font-size:12px;">If you received this, email notifications are working.</p>',
+  });
+  return res.delivered
+    ? { ok: true, message: 'Test email sent to ' + addr + '.' }
+    : { ok: false, message: 'Could not send: ' + (res.reason || 'unknown error') };
+}
+
 async function getPaymongoStatus() {
   const { data, error } = await supabaseAdmin
     .from('settings_billing').select('paymongo_connected, paymongo_mode, paymongo_public_key')
@@ -504,6 +545,7 @@ const settingsService = {
     const beforeMapped = MAPS[section].to(before);
     const dbPatch = MAPS[section].from(patch);
     const updated = await updateConfigRow(table, dbPatch, actorId, section, `Updated ${section} settings`, beforeMapped);
+    if (section === 'notifications') emailService.clearSettingsCache();
     return MAPS[section].to(updated);
   },
 
@@ -523,6 +565,7 @@ const settingsService = {
     if (error) throw new Error('Failed to re-seed ' + section + ': ' + error.message);
 
     await logSettingsChange(actorId, section, `Reset ${section} settings to defaults`, { before: beforeMapped });
+    if (section === 'notifications') emailService.clearSettingsCache();
     return MAPS[section].to(data);
   },
 
@@ -540,6 +583,7 @@ const settingsService = {
 
   listAuditLog,
   testSms,
+  testEmail,
   getPaymongoStatus,
 };
 

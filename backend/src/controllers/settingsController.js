@@ -72,6 +72,7 @@ const settingsController = {
     const { phone, message } = req.body;
     return svc.testSms(phone, message);
   }),
+  testEmail: wrap(async (req) => svc.testEmail(req.body?.to)),
   paymongoStatus: wrap(async () => svc.getPaymongoStatus()),
 };
 

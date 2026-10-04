@@ -45,9 +45,49 @@ function getTransporter() {
   }
 }
 
+// Admin > Settings > Notification Settings (email_enabled / email_from_name /
+// email_from). Cached briefly so a burst of notifications doesn't hit the DB
+// for every message. Falls back to env defaults if the row can't be read.
+let _senderCache = { at: 0, value: null };
+async function getSenderSettings() {
+  if (_senderCache.value && Date.now() - _senderCache.at < 60_000) return _senderCache.value;
+  let value = { enabled: true, fromName: '', fromAddress: '' };
+  try {
+    const { supabaseAdmin } = require('../config/supabase');
+    const { data } = await supabaseAdmin
+      .from('settings_notifications').select('*').eq('id', 'default').maybeSingle();
+    if (data) {
+      value = {
+        enabled:     data.email_enabled !== false,
+        fromName:    data.email_from_name ?? data.clicksend_from ?? '',
+        fromAddress: data.email_from || '',
+      };
+    }
+  } catch (e) {
+    logger.warn('email', 'could not read sender settings', { msg: e.message });
+  }
+  _senderCache = { at: Date.now(), value };
+  return value;
+}
+
+function buildFrom({ fromName, fromAddress }) {
+  const addr = fromAddress || process.env.SMTP_FROM_ADDRESS || process.env.SMTP_USER;
+  if (!fromName && !fromAddress) return process.env.SMTP_FROM || 'VETLINK <noreply@vetlink.local>';
+  const name = String(fromName || 'VETLINK').replace(/["<>]/g, '');
+  return `"${name}" <${addr}>`;
+}
+
 const emailService = {
 
   isConfigured,
+
+  /** Admin master switch for notification emails (Settings > Notifications). */
+  async isEnabled() {
+    return (await getSenderSettings()).enabled;
+  },
+
+  /** Drop the cached sender settings (call after they're edited). */
+  clearSettingsCache() { _senderCache = { at: 0, value: null }; },
 
   /**
    * Send an email. Always resolves (never rejects) — the caller can
@@ -64,8 +104,9 @@ const emailService = {
     }
 
     try {
+      const sender = from ? null : await getSenderSettings();
       const info = await tx.sendMail({
-        from: from || process.env.SMTP_FROM || 'VETLINK <noreply@vetlink.local>',
+        from: from || buildFrom(sender),
         to,
         subject,
         text: text || (html ? html.replace(/<[^>]+>/g, '') : ''),

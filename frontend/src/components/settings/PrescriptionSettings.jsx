@@ -56,11 +56,11 @@ export default function PrescriptionSettings() {
 
   const addMed = () => {
     if (!medDraft.name.trim()) return;
-    set({ catalog: [...rx.catalog, { ...medDraft, name: medDraft.name.trim() }] });
+    set({ medicationCatalog: [...rx.medicationCatalog, { ...medDraft, name: medDraft.name.trim() }] });
     setMedDraft({ name: '', form: 'Tablet', unit: 'mg' });
     setShowAddMed(false);
   };
-  const removeMed = (name) => set({ catalog: rx.catalog.filter(m => m.name !== name) });
+  const removeMed = (name) => set({ medicationCatalog: rx.medicationCatalog.filter(m => m.name !== name) });
 
   const handleSave = async () => {
     setSaving(true);
@@ -82,7 +82,7 @@ export default function PrescriptionSettings() {
     <div className="space-y-5">
       <SettingCard title="Medication Catalog" subtitle="Medications available when writing prescriptions." icon={Pill}>
         <div className="space-y-2">
-          {rx.catalog.map((m) => (
+          {rx.medicationCatalog.map((m) => (
             <div key={m.name} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-white/5">
               <div className="flex items-center gap-3">
                 <FlaskConical className="w-4 h-4 text-blue-500" />

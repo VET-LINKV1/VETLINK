@@ -472,7 +472,7 @@ const postCareService = {
           } else if (ch === 'sms' && smsService && r.owner_phone) {
             const res = await smsService.sendNotification(r.owner_phone, msg);
             await logDispatch(r.id, ch, res.delivered ? 'sent' : 'failed', msg, res.delivered ? null : (res.error || res.provider));
-          } else if (ch === 'email' && emailService && r.owner_email) {
+          } else if (ch === 'email' && emailService && r.owner_email && await emailService.isEnabled()) {
             const res = await emailService.send({
               to:      r.owner_email,
               subject: `Medication reminder — ${r.pet_name}`,

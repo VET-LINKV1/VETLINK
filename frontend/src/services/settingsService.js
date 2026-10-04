@@ -82,6 +82,10 @@ export const settingsService = {
     const { data } = await apiClient.post('/admin/settings/test/sms', { phone, message });
     return data.data;
   },
+  async testEmail(to) {
+    const { data } = await apiClient.post('/admin/settings/test/email', { to });
+    return data.data;
+  },
   async getPaymongoStatus() {
     const { data } = await apiClient.get('/admin/settings/billing/paymongo');
     return data.data;
