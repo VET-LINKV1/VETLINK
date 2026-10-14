@@ -14,7 +14,7 @@
     }
   ],
   "crons": [
-    { "path": "/api/reminders/cron", "schedule": "0 8 * * *" },
+    { "path": "/api/reminders/cron", "schedule": "0 0 * * *" },
     { "path": "/api/reminders/vaccination-cron", "schedule": "0 9 * * *" },
     { "path": "/api/reminders/telehealth-cron", "schedule": "0 10 * * *" },
     { "path": "/api/no-show/sweep", "schedule": "30 7 * * *" }

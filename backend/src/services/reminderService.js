@@ -20,54 +20,87 @@ const notificationService = require('./notificationService');
 const logger = require('../utils/logger');
 
 const REMINDER_MARKER = 'reminder_24h_sent';
+const REMINDER_WINDOW_HOURS = 36;
+
+/** "Tue, Oct 14 at 9:30 AM" in clinic time (Philippines), independent of server timezone. */
+function formatManila(iso) {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'Asia/Manila' });
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' });
+  return `${date} at ${time}`;
+}
 const STAFF_ROLES = ['admin', 'veterinarian', 'staff'];
 
 const reminderService = {
 
   /* ──────────────────── APPOINTMENT REMINDERS ───────────────── */
 
+  /**
+   * Remind about every appointment starting in the next REMINDER_WINDOW_HOURS.
+   * Safe to run as often as you like: each appointment is only reminded once
+   * (tracked via a marker in status_history). A daily run is enough because
+   * the window is wider than 24h.
+   *
+   *   • confirmed appointments → client gets in-app + email (+SMS if opted in),
+   *     the assigned vet gets an in-app reminder
+   *   • admin/staff get ONE in-app digest ("N appointments coming up, X still
+   *     unconfirmed") so the front desk knows what is on the schedule
+   */
   async sendUpcomingReminders() {
-    const now      = new Date();
-    const in24h    = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const in25h    = new Date(now.getTime() + 25 * 60 * 60 * 1000); // 1h window so we don't miss any
+    const now    = new Date();
+    const until  = new Date(now.getTime() + REMINDER_WINDOW_HOURS * 60 * 60 * 1000);
 
     const { data: appts, error } = await supabaseAdmin
       .from('appointments')
       .select(`
-        id, status, appointment_at, status_history,
+        id, status, appointment_at, type, status_history,
         pets(name),
         client:users!appointments_client_id_fkey(id, name, phone_number),
-        vet:users!appointments_vet_id_fkey(name)
+        vet:users!appointments_vet_id_fkey(id, name)
       `)
       .in('status', ['confirmed','pending'])
-      .gte('appointment_at', in24h.toISOString())
-      .lte('appointment_at', in25h.toISOString());
+      .gte('appointment_at', now.toISOString())
+      .lte('appointment_at', until.toISOString())
+      .order('appointment_at', { ascending: true });
 
     if (error) throw new Error(error.message);
 
-    let sent = 0, skipped = 0;
+    let sent = 0, skipped = 0, unconfirmed = 0;
     for (const appt of appts || []) {
-      // Skip if already reminded
+      if (appt.status === 'pending') unconfirmed++;
+
+      // Skip if already reminded, and never remind clients about an
+      // appointment the clinic hasn't confirmed yet.
       const history = Array.isArray(appt.status_history) ? appt.status_history : [];
-      if (history.some(h => h.event === REMINDER_MARKER)) { skipped++; continue; }
+      if (appt.status !== 'confirmed' || history.some(h => h.event === REMINDER_MARKER)) { skipped++; continue; }
 
-      const apptDate = new Date(appt.appointment_at);
-      const dateStr  = apptDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-      const timeStr  = apptDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-      const petName  = appt.pets?.name || 'your pet';
-      const vetName  = appt.vet?.name  || 'the vet';
+      const when    = formatManila(appt.appointment_at);
+      const petName = appt.pets?.name || 'your pet';
+      const vetName = appt.vet?.name  || 'the vet';
 
-      if (appt.client?.id) {
-        await notificationService.createWithSMS(appt.client.id, {
-          title:   'Appointment Reminder',
-          message: `Reminder: ${petName}'s appointment is tomorrow, ${dateStr} at ${timeStr} with ${vetName}.`,
-          type:    'reminder',
-          link:    '/client/appointments',
-          smsBody: `PHVC: Reminder — ${petName}'s appointment is tomorrow ${dateStr} at ${timeStr} with ${vetName}.`,
-        });
+      try {
+        if (appt.client?.id) {
+          await notificationService.createWithSMS(appt.client.id, {
+            title:   'Appointment Reminder',
+            message: `Reminder: ${petName}'s appointment is on ${when} with ${vetName}.`,
+            type:    'reminder',
+            link:    '/client/appointments',
+            smsBody: `PHVC: Reminder — ${petName}'s appointment is on ${when} with ${vetName}.`,
+          });
+        }
+        if (appt.vet?.id) {
+          await notificationService.create(appt.vet.id, {
+            title:   'Upcoming appointment',
+            message: `${petName}${appt.client?.name ? ` (${appt.client.name})` : ''} — ${appt.type || 'Appointment'} on ${when}.`,
+            type:    'reminder',
+            link:    '/schedule',
+          });
+        }
+      } catch (e) {
+        logger.warn('reminder', 'send failed', { msg: e.message, appointmentId: appt.id });
+        continue; // don't mark as reminded — retry on next sweep
       }
 
-      // Mark as reminded by appending to status_history
       const newHistory = [...history, { event: REMINDER_MARKER, at: new Date().toISOString() }];
       await supabaseAdmin.from('appointments')
         .update({ status_history: newHistory })
@@ -76,8 +109,20 @@ const reminderService = {
       sent++;
     }
 
-    logger.info('reminder', 'sweep complete', { sent, skipped, windowStart: in24h.toISOString(), windowEnd: in25h.toISOString() });
-    return { sent, skipped, found: (appts || []).length };
+    // One staff digest per sweep
+    const total = (appts || []).length;
+    if (total > 0) {
+      await notificationService.notifyRoles(['admin', 'staff'], {
+        title:   'Upcoming appointments',
+        message: `${total} appointment${total === 1 ? '' : 's'} in the next ${REMINDER_WINDOW_HOURS} hours`
+               + (unconfirmed ? ` — ${unconfirmed} still need${unconfirmed === 1 ? 's' : ''} confirmation.` : '.'),
+        type:    'reminder',
+        link:    '/appointments',
+      });
+    }
+
+    logger.info('reminder', 'sweep complete', { sent, skipped, found: total, unconfirmed });
+    return { sent, skipped, found: total, unconfirmed };
   },
 
   /* ──────────────────── VACCINATION / DEWORMING REMINDERS ────── */

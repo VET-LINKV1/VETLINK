@@ -403,7 +403,9 @@ const appointmentService = {
     if (newStatus === 'confirmed' && updated.client?.id) {
       await notificationService.createWithSMS(updated.client.id, {
         title:   'Appointment Confirmed',
-        message: `Your appointment for ${petName} on ${dateStr} has been confirmed!`,
+        message: `Your appointment for ${petName} on ${updated.appointment_at
+          ? new Date(updated.appointment_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' })
+          : dateStr}${updated.vet?.name ? ` with ${updated.vet.name}` : ''} has been confirmed. We'll send you a reminder before the visit.`,
         type:    'success',
         link:    '/client/appointments',
         smsBody: `PHVC: Your appointment for ${petName} on ${dateStr} is CONFIRMED. See you then!`,
