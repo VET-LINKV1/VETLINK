@@ -244,29 +244,20 @@ function App() {
       <Route path="/messages" element={
         <Staff roles={['veterinarian']}><CommunicationsPage /></Staff>
       } />
-      <Route path="/telehealth" element={
-        <Staff roles={['veterinarian']}><CommunicationsPage /></Staff>
-      } />
+      {/* Telehealth disabled by clinic request — old links redirect to Messages */}
+      <Route path="/telehealth" element={<Navigate to="/messages" replace />} />
       <Route path="/communications" element={
         <Staff roles={['veterinarian']}><CommunicationsPage /></Staff>
       } />
-      <Route path="/telehealth/:id" element={
-        <ProtectedRoute>
-          {role === 'client'
-            ? <ClientLayout><TelehealthPage /></ClientLayout>
-            : <DashboardLayout><TelehealthPage /></DashboardLayout>}
-        </ProtectedRoute>
-      } />
+      {/* Telehealth disabled by clinic request — old links redirect to Messages */}
+      <Route path="/telehealth/:id" element={<Navigate to="/messages" replace />} />
       <Route path="/client/messages" element={
         <ProtectedRoute allowedRoles={['client']}>
           <ClientLayout><ClientCommunicationsPage /></ClientLayout>
         </ProtectedRoute>
       } />
-      <Route path="/client/telehealth" element={
-        <ProtectedRoute allowedRoles={['client']}>
-          <ClientLayout><ClientCommunicationsPage /></ClientLayout>
-        </ProtectedRoute>
-      } />
+      {/* Telehealth disabled by clinic request — old links redirect to Messages */}
+      <Route path="/client/telehealth" element={<Navigate to="/client/messages" replace />} />
       <Route path="/client/communications" element={
         <ProtectedRoute allowedRoles={['client']}>
           <ClientLayout><ClientCommunicationsPage /></ClientLayout>

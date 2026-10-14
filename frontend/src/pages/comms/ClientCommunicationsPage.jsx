@@ -21,7 +21,8 @@ import {
 
 const TABS = [
   { key: 'messages',     label: 'Messages',   icon: MessageCircle },
-  { key: 'telehealth',   label: 'Video Consults', icon: Video },
+  // Telehealth tab hidden by clinic request (code kept, re-enable by restoring this entry)
+  // { key: 'telehealth',   label: 'Video Consults', icon: Video },
 ];
 
 const CONSULTATION_FILTERS = [
@@ -47,9 +48,7 @@ export default function ClientCommunicationsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState(() =>
-    location.pathname.includes('/telehealth') ? 'telehealth' : 'messages'
-  );
+  const [activeTab, setActiveTab] = useState('messages');
 
   return (
     <div className="h-full flex flex-col gap-3">
@@ -58,10 +57,11 @@ export default function ClientCommunicationsPage() {
         <h1 className="font-display font-700 text-xl text-slate-800 dark:text-white">
           Communications
         </h1>
-        <p className="text-xs font-body text-slate-400">Chat with the clinic and manage video consultations.</p>
+        <p className="text-xs font-body text-slate-400">Chat with the clinic.</p>
       </div>
 
       {/* Tab bar */}
+      {TABS.length > 1 && (
       <div className="flex gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-xl w-fit">
         {TABS.map((t) => {
           const Icon = t.icon;
@@ -76,6 +76,7 @@ export default function ClientCommunicationsPage() {
           );
         })}
       </div>
+      )}
 
       {/* Tab content */}
       <div className="flex-1 min-h-0">

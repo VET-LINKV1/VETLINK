@@ -29,13 +29,19 @@ function AppointmentForm({ pets, onSuccess, onClose }) {
   const [loadingVets, setLoadingVets] = useState(true);
   const [error, setError]             = useState('');
   const [errors, setErrors]           = useState({});
+  const [showNotes, setShowNotes]     = useState(false);
 
   const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
   const minDate  = tomorrow.toISOString().split('T')[0];
 
   useEffect(() => {
     scheduleService.getAllVets()
-      .then(setVets)
+      .then((list) => {
+        setVets(list);
+        // Keep booking simple: pre-select the first vet so the client
+        // doesn't have to choose (they can still change it if several exist).
+        if (list?.length) setForm(p => (p.vetId ? p : { ...p, vetId: list[0].id }));
+      })
       .catch(() => setError('Failed to load veterinarians.'))
       .finally(() => setLoadingVets(false));
     paymentService.listServices()
@@ -175,27 +181,30 @@ function AppointmentForm({ pets, onSuccess, onClose }) {
           {errors.petId && <p className="mt-1 text-xs text-red-500">{errors.petId}</p>}
         </div>
 
-        {/* Vet selection */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5 font-body">
-            <span className="flex items-center gap-1.5"><Stethoscope className="w-3.5 h-3.5" /> Select Veterinarian *</span>
-          </label>
-          {loadingVets ? (
-            <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500 text-sm font-body py-2">
-              <Loader2 className="w-4 h-4 animate-spin" /> Loading vets...
-            </div>
-          ) : (
+        {/* Vet selection — only shown when the clinic has more than one vet */}
+        {!loadingVets && vets.length > 1 && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5 font-body">
+              <span className="flex items-center gap-1.5"><Stethoscope className="w-3.5 h-3.5" /> Veterinarian</span>
+            </label>
             <select value={form.vetId} onChange={e => set('vetId', e.target.value)} className={inputClass('vetId')}>
-              <option value="">Choose a veterinarian...</option>
               {vets.map(v => (
                 <option key={v.id} value={v.id}>
                   {v.name}{v.staff_profiles?.specialization ? ` — ${v.staff_profiles.specialization}` : ''}
                 </option>
               ))}
             </select>
-          )}
-          {errors.vetId && <p className="mt-1 text-xs text-red-500">{errors.vetId}</p>}
-        </div>
+            {errors.vetId && <p className="mt-1 text-xs text-red-500">{errors.vetId}</p>}
+          </div>
+        )}
+        {loadingVets && (
+          <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500 text-sm font-body py-1">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+          </div>
+        )}
+        {!loadingVets && vets.length === 0 && (
+          <p className="text-xs text-red-500 font-body">No veterinarian is available for booking right now.</p>
+        )}
 
         {/* Date + Service row */}
         <div className="grid grid-cols-2 gap-3">
@@ -237,32 +246,30 @@ function AppointmentForm({ pets, onSuccess, onClose }) {
           </div>
         )}
 
-        {/* Notes */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5 font-body">Notes (optional)</label>
-          <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)}
-            placeholder="Any symptoms or concerns..."
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-slate-800 dark:text-white text-sm font-body focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
-        </div>
+        {/* Notes (optional, collapsed by default) */}
+        {showNotes ? (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5 font-body">Notes (optional)</label>
+            <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)}
+              placeholder="Any symptoms or concerns..."
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-slate-800 dark:text-white text-sm font-body focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
+          </div>
+        ) : (
+          <button type="button" onClick={() => setShowNotes(true)}
+            className="text-xs font-body font-600 text-blue-600 hover:text-blue-700">
+            + Add a note for the vet
+          </button>
+        )}
 
-        {/* === Payment summary === */}
-        <div className="rounded-2xl bg-gradient-to-br from-blue-50 to-sky-50 dark:from-blue-500/10 dark:to-sky-500/5 border border-blue-100 dark:border-blue-400/20 p-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <CreditCard className="w-4 h-4 text-blue-600 dark:text-blue-300" />
-            <p className="font-display text-blue-900 dark:text-blue-100 text-sm font-700">Payment summary</p>
+        {/* Payment summary (compact) */}
+        <div className="flex items-center justify-between rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-400/20 px-4 py-3">
+          <div>
+            <p className="text-blue-900 dark:text-blue-100 text-sm font-body font-600">{form.type || 'Service'}</p>
+            <p className="text-blue-700 dark:text-blue-200 text-[11px] font-body flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3" /> Secure payment · Cards · GCash · Maya · GrabPay
+            </p>
           </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-700 dark:text-slate-200 font-body">{form.type || 'Service'}</span>
-            <span className="font-display text-slate-800 dark:text-white font-700">{selectedService?.displayPrice || '—'}</span>
-          </div>
-          <div className="border-t border-blue-100 dark:border-blue-400/20 pt-2 flex items-center justify-between">
-            <span className="text-blue-900 dark:text-blue-100 font-body font-600 text-sm">Total</span>
-            <span className="font-display text-blue-900 dark:text-blue-100 text-lg font-700">{selectedService?.displayPrice || '—'}</span>
-          </div>
-          <div className="flex items-center gap-1.5 pt-1">
-            <ShieldCheck className="w-3 h-3 text-blue-600 dark:text-blue-300" />
-            <span className="text-blue-700 dark:text-blue-200 text-[11px] font-body">Secured by PayMongo · Cards · GCash · Maya · GrabPay</span>
-          </div>
+          <span className="font-display text-blue-900 dark:text-blue-100 text-lg font-700">{selectedService?.displayPrice || '—'}</span>
         </div>
 
         {/* Submit — Pay & Book */}
@@ -273,9 +280,6 @@ function AppointmentForm({ pets, onSuccess, onClose }) {
             : <><CreditCard className="w-4 h-4" /> Pay {selectedService?.displayPrice || ''} & Book</>}
         </button>
 
-        <p className="text-center text-[11px] font-body text-slate-400 dark:text-slate-500">
-          You'll be redirected to a secure PayMongo page to complete payment.
-        </p>
       </form>
     </div>
   );
