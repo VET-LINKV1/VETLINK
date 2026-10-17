@@ -19,7 +19,7 @@ const schemas = {
   }),
 
   updateStatus: Joi.object({
-    status: Joi.string().valid('confirmed', 'completed', 'cancelled', 'no_show', 'declined').required(),
+    status: Joi.string().valid('pending', 'confirmed', 'completed', 'cancelled', 'no_show', 'declined').required(),
     reason: Joi.string().max(500).allow('', null),
   }),
 

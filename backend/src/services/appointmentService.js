@@ -8,6 +8,8 @@ const notificationService = require('./notificationService');
 const logger = require('../utils/logger');
 const { getPrice } = require('../config/pricing');
 
+const ALL_STATUSES = ['pending', 'confirmed', 'completed', 'no_show', 'declined', 'cancelled'];
+
 const VALID_TRANSITIONS = {
   pending:   ['confirmed', 'cancelled'],
   confirmed: ['completed', 'cancelled', 'no_show'],
@@ -330,12 +332,16 @@ const appointmentService = {
   async updateStatus(appointmentId, newStatus, actorId, actorRole, reason) {
     const { data: current } = await supabaseAdmin
       .from('appointments')
-      .select('id, status, status_history, client_id, vet_id')
+      .select('id, status, status_history, client_id, vet_id, appointment_at, duration_mins')
       .eq('id', appointmentId)
       .single();
     if (!current) throw new Error('Appointment not found.');
 
-    const allowed = VALID_TRANSITIONS[current.status] || [];
+    // Admin and staff may set ANY status (so mistakes can be corrected, e.g.
+    // Completed -> Confirmed). Clients and vets keep the stricter workflow.
+    const allowed = (actorRole === 'admin' || actorRole === 'staff')
+      ? ALL_STATUSES.filter(st => st !== current.status)
+      : (VALID_TRANSITIONS[current.status] || []);
     if (!allowed.includes(newStatus)) {
       throw new Error(`Cannot change from "${current.status}" to "${newStatus}".`);
     }
@@ -370,6 +376,32 @@ const appointmentService = {
       status_updated_at: new Date().toISOString(),
       status_history:    history,
     };
+
+    // Re-opening an appointment that had released its slot (cancelled, declined,
+    // no-show, completed) -> make sure nobody else has taken the time since.
+    const ACTIVE = ['pending', 'confirmed'];
+    if (ACTIVE.includes(newStatus) && !ACTIVE.includes(current.status) && current.appointment_at && current.vet_id) {
+      const mins  = current.duration_mins || 30;
+      const start = new Date(current.appointment_at).getTime();
+      const { data: clash } = await supabaseAdmin
+        .from('appointments')
+        .select('id')
+        .eq('vet_id', current.vet_id)
+        .in('status', ACTIVE)
+        .neq('id', appointmentId)
+        .lt('appointment_at', new Date(start + mins * 60000).toISOString())
+        .gt('appointment_at', new Date(start - mins * 60000).toISOString());
+      if (clash && clash.length > 0) {
+        throw new Error('Cannot re-open this appointment: another booking now holds that time slot.');
+      }
+    }
+    if (ACTIVE.includes(newStatus)) {
+      // clear leftovers from an earlier cancel/decline/complete
+      patch.cancelled_by = null; patch.cancel_reason = null;
+      patch.declined_by = null; patch.declined_at = null; patch.declined_reason = null;
+      patch.completed_at = null;
+      if (newStatus === 'pending') patch.approved_by = null;
+    }
     if (newStatus === 'confirmed') patch.approved_by   = actorId;
     if (newStatus === 'cancelled') {
       patch.cancelled_by  = actorId;
@@ -397,18 +429,25 @@ const appointmentService = {
     // Notifications
     const petName = updated.pets?.name || 'your pet';
     const dateStr = updated.appointment_at
-      ? new Date(updated.appointment_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      ? new Date(updated.appointment_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' })
       : '';
 
     if (newStatus === 'confirmed' && updated.client?.id) {
       await notificationService.createWithSMS(updated.client.id, {
         title:   'Appointment Confirmed',
-        message: `Your appointment for ${petName} on ${updated.appointment_at
-          ? new Date(updated.appointment_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' })
-          : dateStr}${updated.vet?.name ? ` with ${updated.vet.name}` : ''} has been confirmed. We'll send you a reminder before the visit.`,
+        message: `Your appointment for ${petName} on ${dateStr}${updated.vet?.name ? ` with ${updated.vet.name}` : ''} has been confirmed. We'll send you a reminder before the visit.`,
         type:    'success',
         link:    '/client/appointments',
         smsBody: `PHVC: Your appointment for ${petName} on ${dateStr} is CONFIRMED. See you then!`,
+      });
+    }
+    if (newStatus === 'pending' && actorRole !== 'client' && updated.client?.id) {
+      await notificationService.createWithSMS(updated.client.id, {
+        title:   'Appointment Pending',
+        message: `Your appointment for ${petName} on ${dateStr} is now pending — the clinic will confirm it shortly.`,
+        type:    'info',
+        link:    '/client/appointments',
+        smsBody: `PHVC: Your appointment for ${petName} on ${dateStr} is now PENDING confirmation.`,
       });
     }
     if (newStatus === 'cancelled') {
@@ -439,11 +478,12 @@ const appointmentService = {
       }
     }
     if (newStatus === 'completed' && updated.client?.id) {
-      await notificationService.create(updated.client.id, {
+      await notificationService.createWithSMS(updated.client.id, {
         title:   'Visit Completed',
-        message: `Your appointment for ${petName} on ${dateStr} is complete. Thank you!`,
+        message: `Your appointment for ${petName} on ${dateStr} is complete. Thank you for trusting us with your pet!`,
         type:    'info',
         link:    '/client/appointments',
+        smsBody: `PHVC: Your appointment for ${petName} on ${dateStr} is COMPLETED. Thank you!`,
       });
     }
     if (newStatus === 'no_show') {

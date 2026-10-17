@@ -77,6 +77,8 @@ export default function StaffAppointmentsPage() {
   useEffect(() => { loadAll(); }, [loadAll]);
 
   const handleStatusChange = async (id, newStatus) => {
+    const label = newStatus === 'no_show' ? 'No-Show' : newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+    if (!window.confirm(`Change this appointment to "${label}"?\n\nThe pet owner will be notified (in-app and by email).`)) return;
     const reason = (newStatus === 'cancelled' || newStatus === 'declined')
       ? prompt(newStatus === 'declined' ? 'Reason for decline (optional):' : 'Reason for cancellation (optional):') ?? undefined
       : undefined;

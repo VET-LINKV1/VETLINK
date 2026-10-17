@@ -3,15 +3,20 @@ import { Calendar, Clock, PawPrint, Stethoscope, MoreVertical, X, CheckCircle, R
 import Badge from '../ui/Badge';
 import RescheduleModal from './RescheduleModal';
 
+const ALL_STATUSES = ['pending', 'confirmed', 'completed', 'no_show', 'declined', 'cancelled'];
+const allExcept = (cur) => ALL_STATUSES.filter(st => st !== cur);
+
+// Admin/staff can set ANY status (so mistakes are fixable); the owner is emailed on each change.
 const STATUS_ACTIONS = {
-  admin:        { pending: ['confirmed','cancelled'], confirmed: ['completed','cancelled','no_show'], completed: [], cancelled: [], no_show: [], declined: [] },
-  staff:        { pending: ['confirmed','cancelled'], confirmed: ['completed','cancelled','no_show'], completed: [], cancelled: [], no_show: [], declined: [] },
+  admin:        Object.fromEntries(ALL_STATUSES.map(st => [st, allExcept(st)])),
+  staff:        Object.fromEntries(ALL_STATUSES.map(st => [st, allExcept(st)])),
   veterinarian: { pending: ['declined'], confirmed: ['completed','cancelled'], completed: [], cancelled: [], no_show: [], declined: [] },
   client:       { pending: ['cancelled'], confirmed: ['cancelled'], completed: [], cancelled: [], no_show: [], declined: [] },
 };
 
-const ACTION_LABELS = { confirmed: 'Confirm', completed: 'Mark Complete', cancelled: 'Cancel', no_show: 'No-Show', declined: 'Decline' };
+const ACTION_LABELS = { pending: 'Pending', confirmed: 'Confirmed', completed: 'Completed', cancelled: 'Cancelled', no_show: 'No-Show', declined: 'Declined' };
 const ACTION_STYLES = {
+  pending:   'border border-amber-300 text-amber-600 hover:bg-amber-50',
   confirmed: 'bg-blue-600 text-white hover:bg-blue-700',
   completed: 'bg-teal-600 text-white hover:bg-teal-700',
   cancelled: 'border border-red-200 text-red-500 hover:bg-red-50',
@@ -106,21 +111,26 @@ function AppointmentCard({ appointment: appt, userRole, onStatusChange, onResche
 
         {/* Action buttons */}
         {(actions.length > 0 || canReschedule) && (
-          <div className="flex gap-2 pt-2 border-t border-slate-100">
+          <div className="pt-2 border-t border-slate-100">
+            {(userRole === 'admin' || userRole === 'staff') && actions.length > 0 && (
+              <p className="text-[11px] font-body text-slate-400 mb-1.5">Set status — the owner is emailed automatically</p>
+            )}
+            <div className="flex flex-wrap gap-2">
             {actions.map(action => (
               <button key={action} type="button"
                 onClick={() => onStatusChange(appt.id, action)}
-                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-body font-600 transition-all ${ACTION_STYLES[action]}`}>
+                className={`flex-1 min-w-[88px] py-1.5 px-3 rounded-lg text-xs font-body font-600 transition-all ${ACTION_STYLES[action]}`}>
                 {ACTION_LABELS[action]}
               </button>
             ))}
             {canReschedule && (
               <button type="button"
                 onClick={() => setShowReschedule(true)}
-                className="flex-1 py-1.5 px-3 rounded-lg text-xs font-body font-600 transition-all border border-blue-200 text-blue-600 hover:bg-blue-50 flex items-center justify-center gap-1">
+                className="flex-1 min-w-[88px] py-1.5 px-3 rounded-lg text-xs font-body font-600 transition-all border border-blue-200 text-blue-600 hover:bg-blue-50 flex items-center justify-center gap-1">
                 <RefreshCw className="w-3 h-3" /> Reschedule
               </button>
             )}
+            </div>
           </div>
         )}
 
