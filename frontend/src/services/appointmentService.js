@@ -25,6 +25,10 @@ export const appointmentService = {
     const { data } = await apiClient.patch(`/appointments/${id}/reschedule`, payload);
     return data.data;
   },
+  async remind(id) {
+    const { data } = await apiClient.post(`/appointments/${id}/remind`);
+    return data.data;
+  },
   async sendRemindersNow() {
     const { data } = await apiClient.post('/reminders/cron');
     return data.data;

@@ -20,6 +20,20 @@ const appointmentController = {
   },
 
   /**
+   * POST /api/appointments/:id/remind
+   * Send the pet owner a reminder (admin / staff / own vet)
+   */
+  async remind(req, res) {
+    try {
+      const data = await appointmentService.sendReminder(req.params.id, req.user.id, req.user.role);
+      res.json({ success: true, data });
+    } catch (err) {
+      const code = err.message === 'Access denied.' ? 403 : err.message === 'Appointment not found.' ? 404 : 400;
+      res.status(code).json({ success: false, error: err.message });
+    }
+  },
+
+  /**
    * GET /api/appointments
    * Get appointments (filtered by role automatically)
    */

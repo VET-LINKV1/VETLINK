@@ -140,7 +140,7 @@ const appointmentService = {
     }
 
     // Notify client + vet
-    const dateStr = appointmentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    const dateStr = appointmentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Asia/Manila' });
     const timeStr = localTime || appointmentDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
     await notificationService.createWithSMS(clientId, {
@@ -150,15 +150,78 @@ const appointmentService = {
       link:    '/client/appointments',
       smsBody: `PHVC: Booking received for ${pet.name} on ${dateStr} at ${timeStr} with ${vet.name}. We'll confirm shortly.`,
     });
+    const { data: owner } = await supabaseAdmin
+      .from('users').select('name').eq('id', clientId).single();
+    const ownerName = owner?.name || 'a client';
+
     await notificationService.createWithSMS(vetId, {
       title:   'New Appointment',
-      message: `${type} for ${pet.name} on ${dateStr} at ${timeStr}.`,
+      message: `${type} for ${pet.name} (owner: ${ownerName}) on ${dateStr} at ${timeStr}.`,
       type:    'info',
-      link:    '/dashboard',
+      link:    '/appointments',
       smsBody: `PHVC: New booking — ${type} for ${pet.name} on ${dateStr} at ${timeStr}. Open your dashboard to approve or decline.`,
     });
 
+    // Front desk: in-app notification + email to every active admin/staff
+    await notificationService.notifyRoles(['admin', 'staff'], {
+      title:   'New appointment request',
+      message: `${ownerName} booked ${type} for ${pet.name} on ${dateStr} at ${timeStr} with ${vet.name}. Awaiting confirmation.`,
+      type:    'info',
+      link:    '/appointments',
+      email:   true,
+    });
+
     return appt;
+  },
+
+  /**
+   * Manually remind the pet owner about an upcoming appointment
+   * (in-app + email, + SMS if opted in). Admin/staff for any appointment,
+   * a vet only for their own. Throttled to once per 10 minutes.
+   */
+  async sendReminder(appointmentId, actorId, actorRole) {
+    const { data: appt } = await supabaseAdmin
+      .from('appointments')
+      .select(`id, status, appointment_at, type, vet_id, status_history,
+               pets(name),
+               client:users!appointments_client_id_fkey(id, name),
+               vet:users!appointments_vet_id_fkey(name)`)
+      .eq('id', appointmentId)
+      .single();
+    if (!appt) throw new Error('Appointment not found.');
+    if (actorRole === 'veterinarian' && appt.vet_id !== actorId) throw new Error('Access denied.');
+    if (!['pending', 'confirmed'].includes(appt.status)) {
+      throw new Error('Reminders can only be sent for pending or confirmed appointments.');
+    }
+    if (!appt.client?.id) throw new Error('This appointment has no pet owner to remind.');
+
+    const history = Array.isArray(appt.status_history) ? appt.status_history : [];
+    const last = [...history].reverse().find(h => h.event === 'reminder_manual');
+    if (last && Date.now() - new Date(last.at).getTime() < 10 * 60 * 1000) {
+      throw new Error('A reminder was just sent. Please wait a few minutes before sending another.');
+    }
+
+    const when = new Date(appt.appointment_at).toLocaleString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila',
+    });
+    const petName = appt.pets?.name || 'your pet';
+    const vetName = appt.vet?.name  || 'the vet';
+    const unconfirmed = appt.status === 'pending' ? ' (awaiting confirmation from the clinic)' : '';
+
+    await notificationService.createWithSMS(appt.client.id, {
+      title:   'Appointment Reminder',
+      message: `Reminder: ${petName}'s ${appt.type || 'appointment'} is on ${when} with ${vetName}${unconfirmed}.`,
+      type:    'reminder',
+      link:    '/client/appointments',
+      smsBody: `PHVC: Reminder — ${petName}'s appointment is on ${when} with ${vetName}.`,
+    });
+
+    const at = new Date().toISOString();
+    await supabaseAdmin.from('appointments')
+      .update({ status_history: [...history, { event: 'reminder_manual', at, by: actorId }] })
+      .eq('id', appointmentId);
+
+    return { sentAt: at, to: appt.client.name };
   },
 
   async getAll(userId, role, filters = {}) {

@@ -16,6 +16,7 @@ router.get('/:id',   appointmentController.getById);
 
 // Status updates
 router.patch('/:id/status', roleMiddleware('admin','staff','veterinarian'), validateBody('updateStatus'), appointmentController.updateStatus);
+router.post('/:id/remind', roleMiddleware('admin','staff','veterinarian'), appointmentController.remind);
 router.patch('/:id/cancel', validateBody('cancel'), appointmentController.cancel);
 router.patch('/:id/reschedule', validateBody('reschedule'), appointmentController.reschedule);
 

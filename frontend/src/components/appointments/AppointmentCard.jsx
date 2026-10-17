@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Calendar, Clock, PawPrint, Stethoscope, MoreVertical, X, CheckCircle, RefreshCw } from 'lucide-react';
+import { Calendar, Clock, PawPrint, Stethoscope, MoreVertical, X, CheckCircle, RefreshCw, Bell, Loader2 } from 'lucide-react';
+import { appointmentService } from '../../services/appointmentService';
 import Badge from '../ui/Badge';
 import RescheduleModal from './RescheduleModal';
 
@@ -37,6 +38,19 @@ function AppointmentCard({ appointment: appt, userRole, onStatusChange, onResche
   const canReschedule = (CAN_RESCHEDULE[userRole] || []).includes(appt.status);
   const [showReschedule, setShowReschedule] = useState(false);
   const dt = appt.appointment_at ? new Date(appt.appointment_at) : null;
+  const canRemind = ['admin', 'staff', 'veterinarian'].includes(userRole) && ['pending', 'confirmed'].includes(appt.status);
+  const lastManual = [...(Array.isArray(appt.status_history) ? appt.status_history : [])].reverse().find(h => h.event === 'reminder_manual');
+  const [remind, setRemind] = useState({ busy: false, msg: '', ok: false, sentAt: lastManual?.at || null });
+
+  const handleRemind = async () => {
+    setRemind(r => ({ ...r, busy: true, msg: '' }));
+    try {
+      const r = await appointmentService.remind(appt.id);
+      setRemind({ busy: false, ok: true, msg: `Reminder sent to ${r.to || 'the owner'}.`, sentAt: r.sentAt });
+    } catch (err) {
+      setRemind(r => ({ ...r, busy: false, ok: false, msg: err?.response?.data?.error || 'Could not send reminder.' }));
+    }
+  };
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
@@ -107,6 +121,23 @@ function AppointmentCard({ appointment: appt, userRole, onStatusChange, onResche
           <p className="text-xs text-slate-500 font-body bg-slate-50 rounded-lg px-3 py-2 mb-3 italic">
             "{appt.notes}"
           </p>
+        )}
+
+        {/* Remind the pet owner */}
+        {canRemind && (
+          <div className="mb-3">
+            <button type="button" onClick={handleRemind} disabled={remind.busy}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-body font-600 bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 disabled:opacity-60 transition-all">
+              {remind.busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
+              Remind pet owner
+            </button>
+            {(remind.msg || remind.sentAt) && (
+              <p className={`mt-1 text-[11px] font-body ${remind.msg && !remind.ok ? 'text-red-500' : 'text-slate-400'}`}>
+                {remind.msg || ''}
+                {!remind.msg || remind.ok ? (remind.sentAt ? `${remind.msg ? ' ' : ''}Last reminded ${new Date(remind.sentAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.` : '') : ''}
+              </p>
+            )}
+          </div>
         )}
 
         {/* Action buttons */}

@@ -69,6 +69,25 @@ const notificationService = {
     }
   },
 
+  /** In-app + email (no SMS). Used for staff/doctor alerts. */
+  async createWithEmail(userId, { title, message, type = 'info', link, emailSubject, emailHtml }) {
+    if (!userId) return;
+    await notificationService.create(userId, { title, message, type, link });
+    try {
+      const { data: user } = await supabaseAdmin
+        .from('users').select('email').eq('id', userId).single();
+      if (user?.email && emailService.isConfigured() && await emailService.isEnabled()) {
+        await emailService.send({
+          to:      user.email,
+          subject: emailSubject || title,
+          html:    emailHtml || emailTemplate(title, message, link),
+        });
+      }
+    } catch (e) {
+      logger.warn('notification', 'email dispatch failed', { msg: e.message, userId });
+    }
+  },
+
   async getForUser(userId, { limit = 50 } = {}) {
     const { data, error } = await supabaseAdmin
       .from('notifications')
@@ -107,13 +126,14 @@ const notificationService = {
    * whole lookup, is logged and swallowed so it never blocks the
    * action that triggered it.
    */
-  async notifyRoles(roles, { title, message, type = 'info', link } = {}) {
+  async notifyRoles(roles, { title, message, type = 'info', link, email = false } = {}) {
     try {
       const { data: users } = await supabaseAdmin
         .from('users').select('id').in('role', roles).eq('is_active', true);
-      await Promise.all((users || []).map(u =>
-        notificationService.create(u.id, { title, message, type, link }).catch(() => null)
-      ));
+      await Promise.all((users || []).map(u => (email
+        ? notificationService.createWithEmail(u.id, { title, message, type, link })
+        : notificationService.create(u.id, { title, message, type, link })
+      ).catch(() => null)));
     } catch (e) {
       logger.warn('notification', 'notifyRoles failed', { msg: e.message, roles });
     }

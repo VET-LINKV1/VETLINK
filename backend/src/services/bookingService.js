@@ -271,6 +271,7 @@ const bookingService = {
           message: `Emergency appointment booked for ${pet.name} at ${new Date(appt.appointment_at).toLocaleString()}.`,
           type:    'warning',
           link:    '/appointments',
+          email:   true,
         });
       } else {
         const when = new Date(appt.appointment_at).toLocaleString('en-US', {
@@ -281,6 +282,7 @@ const bookingService = {
           message: `${pet.name} — ${reason.label} requested for ${when}. Awaiting confirmation.`,
           type:    'info',
           link:    '/appointments',
+          email:   true,
         });
       }
     }
