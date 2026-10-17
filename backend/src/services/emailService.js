@@ -71,10 +71,32 @@ async function getSenderSettings() {
 }
 
 function buildFrom({ fromName, fromAddress }) {
-  const addr = fromAddress || process.env.SMTP_FROM_ADDRESS || process.env.SMTP_USER;
-  if (!fromName && !fromAddress) return process.env.SMTP_FROM || 'VETLINK <noreply@vetlink.local>';
+  // Gmail (and most providers) only deliver mail "From" the authenticated
+  // mailbox; a different From address gets rewritten or flagged as spoofing,
+  // which is a classic spam trigger. So on Gmail we always use SMTP_USER.
+  const isGmail = /gmail\.com|googlemail\.com/i.test(process.env.SMTP_HOST || '');
+  const addr = isGmail
+    ? process.env.SMTP_USER
+    : (fromAddress || process.env.SMTP_FROM_ADDRESS || process.env.SMTP_USER);
+  if (!fromName && !fromAddress) {
+    return isGmail
+      ? `"VETLINK" <${addr}>`
+      : (process.env.SMTP_FROM || 'VETLINK <noreply@vetlink.local>');
+  }
   const name = String(fromName || 'VETLINK').replace(/["<>]/g, '');
   return `"${name}" <${addr}>`;
+}
+
+/** Readable plain-text fallback (spam filters penalise HTML-only mail). */
+function htmlToText(html = '') {
+  return String(html)
+    .replace(/<a [^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gi, '$2: $1')
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 const emailService = {
@@ -105,12 +127,21 @@ const emailService = {
 
     try {
       const sender = from ? null : await getSenderSettings();
+      const fromHeader = from || buildFrom(sender);
+      const replyAddr  = (fromHeader.match(/<([^>]+)>/) || [])[1] || process.env.SMTP_USER;
       const info = await tx.sendMail({
-        from: from || buildFrom(sender),
+        from: fromHeader,
         to,
+        replyTo: replyAddr,
         subject,
-        text: text || (html ? html.replace(/<[^>]+>/g, '') : ''),
+        text: text || htmlToText(html),
         html,
+        headers: {
+          // Marks this as a one-to-one system message (not bulk mail) and
+          // stops auto-responders from replying to it.
+          'Auto-Submitted': 'auto-generated',
+          'X-Auto-Response-Suppress': 'OOF, AutoReply',
+        },
       });
       logger.info('email', 'sent', { to, messageId: info.messageId });
       return { delivered: true, messageId: info.messageId };
