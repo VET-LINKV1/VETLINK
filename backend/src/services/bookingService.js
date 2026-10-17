@@ -263,26 +263,51 @@ const bookingService = {
 
     logger.info('booking', 'created', { id: appt.id, urgency: appt.urgency, reason: appt.reason_code });
 
-    // ── Front-desk visibility: let admin/staff know a booking came in ──
+    // Clinic-time (Philippines) wording — the server runs in UTC, so always
+    // pass the timezone explicitly or emails show the wrong hour.
+    const PH = 'Asia/Manila';
+    const whenShort = new Date(appt.appointment_at).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: PH,
+    });
+    const whenForClient = new Date(appt.appointment_at).toLocaleString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: PH,
+    });
+    const ownerMsg = (notes || '').trim();
+    const ownerMsgLine = ownerMsg ? ` Owner's message: "${ownerMsg.slice(0, 300)}${ownerMsg.length > 300 ? '…' : ''}"` : '';
+
+    let ownerName = 'A client';
+    try {
+      const { data: owner } = await supabaseAdmin.from('users').select('name').eq('id', finalClientId).single();
+      if (owner?.name) ownerName = owner.name;
+    } catch (_) { /* name is a nicety */ }
+
+    // ── Front-desk + doctor visibility: in-app AND email ──
     if (notificationService) {
       if (reason.code === 'emergency') {
         await notificationService.notifyRoles(['admin', 'staff'], {
           title:   '🚨 EMERGENCY booking',
-          message: `Emergency appointment booked for ${pet.name} at ${new Date(appt.appointment_at).toLocaleString()}.`,
+          message: `Emergency appointment booked by ${ownerName} for ${pet.name} on ${whenShort}.${ownerMsgLine}`,
           type:    'warning',
           link:    '/appointments',
           email:   true,
         });
       } else {
-        const when = new Date(appt.appointment_at).toLocaleString('en-US', {
-          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-        });
         await notificationService.notifyRoles(['admin', 'staff'], {
           title:   'New appointment request',
-          message: `${pet.name} — ${reason.label} requested for ${when}. Awaiting confirmation.`,
+          message: `${ownerName} requested ${reason.label} for ${pet.name} on ${whenShort}. Awaiting confirmation.${ownerMsgLine}`,
           type:    'info',
           link:    '/appointments',
           email:   true,
+        });
+      }
+
+      // The chosen doctor (if the client/clinic picked one)
+      if (appt.vet_id) {
+        await notificationService.createWithEmail(appt.vet_id, {
+          title:   reason.code === 'emergency' ? '🚨 Emergency appointment' : 'New appointment',
+          message: `${reason.label} for ${pet.name} (owner: ${ownerName}) on ${whenShort}.${ownerMsgLine}`,
+          type:    reason.code === 'emergency' ? 'warning' : 'info',
+          link:    '/appointments',
         });
       }
     }
@@ -290,9 +315,6 @@ const bookingService = {
     // ── Let the pet owner know their booking went through (in-app, SMS if
     //    opted in, and email if the clinic has SMTP configured) ──
     if (notificationService) {
-      const whenForClient = new Date(appt.appointment_at).toLocaleString('en-US', {
-        weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
-      });
       if (reason.code === 'emergency') {
         await notificationService.createWithSMS(finalClientId, {
           title:   'Emergency Appointment Confirmed',

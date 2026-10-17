@@ -334,7 +334,18 @@ export default function ClientAppointmentsPage() {
                     )}
 
                     {BOOK_STEPS[step].key === 'reason' && (
-                      <ReasonPicker reasons={reasons} selected={reason?.code} onSelect={setReason} />
+                      <div className="space-y-4">
+                        <ReasonPicker reasons={reasons} selected={reason?.code} onSelect={setReason} />
+                        <label className="block">
+                          <span className="block text-xs font-body font-600 text-slate-500 dark:text-slate-400 mb-1">
+                            Message for the clinic <span className="font-400 text-slate-400">(optional)</span>
+                          </span>
+                          <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)}
+                            maxLength={500}
+                            placeholder="Anything the vet should know? e.g. symptoms, allergies, how long it's been going on"
+                            className="w-full rounded-xl border border-slate-200 dark:border-white/10 px-3 py-2 text-sm font-body bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
+                        </label>
+                      </div>
                     )}
 
                     {BOOK_STEPS[step].key === 'time' && (
@@ -350,14 +361,12 @@ export default function ClientAppointmentsPage() {
                           <MiniCard label="When"   value={slot ? new Date(slot.slotISO).toLocaleString() : '—'}
                             sub="Preferred time — the clinic will confirm it" />
                         </div>
-                        <label className="block">
-                          <span className="block text-[10px] uppercase tracking-wider font-body font-600 text-slate-400 mb-1">
-                            Anything else the vet should know?
-                          </span>
-                          <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)}
-                            placeholder="(optional)"
-                            className="w-full rounded-lg border border-slate-200 dark:border-white/10 px-3 py-2 text-sm font-body bg-white dark:bg-slate-800" />
-                        </label>
+                        {notes && (
+                          <div className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
+                            <p className="text-[10px] uppercase tracking-wider font-body font-600 text-slate-400 mb-0.5">Your message</p>
+                            <p className="text-sm font-body text-slate-700 dark:text-slate-200 whitespace-pre-wrap">{notes}</p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

@@ -9,7 +9,8 @@
  *   selected   reason.code
  *   onSelect(reason)
  */
-import { Stethoscope, Syringe, Scissors, ActivitySquare, Siren, HelpCircle } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Stethoscope, Syringe, Scissors, ActivitySquare, Siren, HelpCircle, Search, X } from 'lucide-react';
 
 const ICON = {
   annual_checkup: Stethoscope,
@@ -37,9 +38,48 @@ const URGENCY_LABEL = {
 };
 
 export default function ReasonPicker({ reasons = [], selected, onSelect }) {
+  const [query, setQuery] = useState('');
+
+  // Every word typed must appear somewhere in the service's name/specialty/urgency.
+  const visible = useMemo(() => {
+    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return reasons;
+    return reasons.filter((r) => {
+      const hay = `${r.label} ${r.code} ${r.suggestedSpecialty || ''} ${r.urgency || ''}`.toLowerCase();
+      return words.every((w) => hay.includes(w));
+    });
+  }, [reasons, query]);
+
   return (
+    <div className="space-y-3">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search a service, e.g. vaccine, check-up, wound…"
+          aria-label="Search services"
+          className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm font-body text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+        {query && (
+          <button type="button" onClick={() => setQuery('')} aria-label="Clear search"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      {visible.length === 0 && (
+        <div className="text-center py-8 rounded-2xl border border-dashed border-slate-200 dark:border-white/10">
+          <p className="text-sm font-body text-slate-500">No service matches “{query}”.</p>
+          <button type="button" onClick={() => setQuery('')}
+            className="mt-1 text-xs font-body font-600 text-blue-600 hover:text-blue-700">Show all services</button>
+        </div>
+      )}
+
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      {reasons.map((r) => {
+      {visible.map((r) => {
         const Icon = ICON[r.code] || HelpCircle;
         const t    = TINT[r.color] || TINT.slate;
         const active = selected === r.code;
@@ -68,6 +108,7 @@ export default function ReasonPicker({ reasons = [], selected, onSelect }) {
           </button>
         );
       })}
+    </div>
     </div>
   );
 }
